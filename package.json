@@ -1,0 +1,140 @@
+{
+  "name": "opencad",
+  "displayName": "OpenCAD",
+  "description": "View and inspect CAD files directly in VS Code. Supports IFC 4x3 (Industry Foundation Classes) with interactive 3D visualization.",
+  "version": "0.1.0",
+  "publisher": "opencad",
+  "license": "MIT",
+  "icon": "assets/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e2e",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/opencad/opencad-vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/opencad/opencad-vscode/issues"
+  },
+  "homepage": "https://github.com/opencad/opencad-vscode#readme",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "cad",
+    "ifc",
+    "bim",
+    "3d",
+    "viewer",
+    "building",
+    "architecture",
+    "engineering",
+    "construction",
+    "ifc4x3",
+    "industry foundation classes"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "opencad.ifcViewer",
+        "displayName": "IFC Viewer",
+        "selector": [
+          {
+            "filenamePattern": "*.ifc"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "opencad.openViewer",
+        "title": "Open CAD Viewer",
+        "category": "OpenCAD"
+      },
+      {
+        "command": "opencad.resetCamera",
+        "title": "Reset Camera",
+        "category": "OpenCAD"
+      },
+      {
+        "command": "opencad.toggleWireframe",
+        "title": "Toggle Wireframe",
+        "category": "OpenCAD"
+      },
+      {
+        "command": "opencad.fitToView",
+        "title": "Fit Model to View",
+        "category": "OpenCAD"
+      }
+    ],
+    "configuration": {
+      "title": "OpenCAD",
+      "properties": {
+        "opencad.defaultBackground": {
+          "type": "string",
+          "default": "#1e1e2e",
+          "description": "Default background color for the 3D viewport."
+        },
+        "opencad.showGrid": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show grid in the 3D viewport."
+        },
+        "opencad.showAxes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show axes helper in the 3D viewport."
+        },
+        "opencad.defaultProjection": {
+          "type": "string",
+          "enum": [
+            "perspective",
+            "orthographic"
+          ],
+          "default": "perspective",
+          "description": "Default camera projection mode."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "bun run build",
+    "build": "bun x webpack --mode production",
+    "watch": "bun x webpack --mode development --watch",
+    "dev": "bun x webpack --mode development",
+    "lint": "bun x eslint src --ext .ts",
+    "lint:fix": "bun x eslint src --ext .ts --fix",
+    "test": "bun ./out/test/runTest.js",
+    "package": "bun x @vscode/vsce package",
+    "publish": "bun x @vscode/vsce publish"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/three": "0.162.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vscode/vsce": "^2.22.0",
+    "copy-webpack-plugin": "^12.0.0",
+    "css-loader": "^6.10.0",
+    "eslint": "^8.56.0",
+    "style-loader": "^3.3.4",
+    "ts-loader": "^9.5.0",
+    "typescript": "^5.3.0",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "dependencies": {
+    "three": "^0.162.0",
+    "web-ifc": "^0.0.57",
+    "web-ifc-three": "^0.0.126"
+  }
+}

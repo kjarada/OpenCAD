@@ -1,0 +1,15 @@
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/**
+.github/**
+.eslintrc.js
+tsconfig.json
+tsconfig.webview.json
+webpack.config.js
+.gitignore
+.editorconfig
+CONTRIBUTING.md
+**/*.map
+**/*.ts
+!dist/**
