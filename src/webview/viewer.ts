@@ -117,7 +117,11 @@ export class IFCViewer {
 
   private async setupIFCLoader(): Promise<void> {
     this.ifcLoader = new IFCLoader();
-    await this.ifcLoader.ifcManager.setWasmPath(this.wasmPath + "/");
+    // Use absolute path so web-ifc's locateFile returns the full webview URI directly
+    const api = this.ifcLoader.ifcManager.state.api as unknown as {
+      SetWasmPath(path: string, absolute?: boolean): void;
+    };
+    api.SetWasmPath(this.wasmPath + "/", true);
   }
 
   async loadIFC(data: Uint8Array): Promise<ModelInfo> {

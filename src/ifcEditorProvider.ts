@@ -127,7 +127,7 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'none';
     img-src ${webview.cspSource} blob: data:;
-    script-src 'nonce-${nonce}' ${webview.cspSource};
+    script-src 'nonce-${nonce}' 'unsafe-eval' 'wasm-unsafe-eval' ${webview.cspSource};
     style-src ${webview.cspSource} 'unsafe-inline';
     font-src ${webview.cspSource};
     connect-src ${webview.cspSource} blob: data:;

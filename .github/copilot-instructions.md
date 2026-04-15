@@ -6,7 +6,7 @@ OpenCAD is a VS Code extension for viewing CAD files (starting with IFC 4x3). It
 
 ## Tech Stack
 
-- **Runtime / Package Manager**: Bun (exclusively — never use npm, yarn, or pnpm)
+- **Runtime / Package Manager**: Bun (exclusively — the ONLY package manager and script runner for this project)
 - **Language**: TypeScript (strict mode)
 - **Bundler**: Webpack (dual config — Node extension + web webview)
 - **3D Engine**: Three.js
@@ -33,8 +33,8 @@ Communication between the two is exclusively via `postMessage` / `onDidReceiveMe
 
 ## Code Conventions
 
-- Use **Bun** for all package management and script execution (`bun install`, `bun run build`, `bun x`)
-- Never introduce npm, yarn, or pnpm commands or lockfiles
+- Use **Bun** exclusively for all package management and script execution (`bun install`, `bun run build`, `bun x`)
+- This project has NO npm/yarn/pnpm — only Bun. All scripts, CI/CD, tasks, and docs must reference Bun commands
 - Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `build:`, `ci:`
 - TypeScript strict mode — no `any` unless absolutely necessary
 - Prefer `const` over `let`; never use `var`
@@ -64,6 +64,17 @@ bun run watch            # Dev build with watch
 bun run lint             # Run ESLint
 bun run package          # Create .vsix package
 ```
+
+## Bun — Package Manager & Script Runner
+
+This project **exclusively** uses [Bun](https://bun.sh) as its package manager and script runner.
+
+- **Never** use `npm`, `npx`, `yarn`, or `pnpm` in any context — code, scripts, CI/CD, tasks, docs, or terminal commands
+- VS Code tasks (`.vscode/tasks.json`) must use `"type": "shell"` with `bun run <script>` — never `"type": "npm"`
+- The lockfile is `bun.lock` — never commit `package-lock.json`, `yarn.lock`, or `pnpm-lock.yaml`
+- CI/CD workflows use `oven-sh/setup-bun` — never `actions/setup-node` for running scripts
+- Use `bun x <package>` instead of `npx <package>`
+- Use `bun install` instead of `npm install`
 
 ## Important Constraints
 

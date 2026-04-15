@@ -13,8 +13,8 @@
 
 ## Checklist
 
-- [ ] Code compiles without errors (`npm run build`)
-- [ ] Linting passes (`npm run lint`)
+- [ ] Code compiles without errors (`bun run build`)
+- [ ] Linting passes (`bun run lint`)
 - [ ] Tested in Extension Development Host
 - [ ] Updated documentation (if applicable)
 - [ ] Updated CHANGELOG.md (if applicable)
