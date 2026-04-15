@@ -63,7 +63,7 @@ code --install-extension kamaljarada.opencad
 Download the latest `.vsix` from [Releases](https://github.com/kjarada/OpenCAD/releases), then:
 
 ```bash
-code --install-extension opencad-0.1.0.vsix
+code --install-extension opencad-*.vsix
 ```
 
 ## Usage
@@ -180,10 +180,10 @@ Releases are automated via GitHub Actions:
 1. **Create a version tag:**
    ```bash
    # Update version in package.json, then tag
-   git tag v0.1.1
+   git tag v0.2.0
 
    # Push with tags
-   git push origin main --tags
+   git push origin master --tags
    ```
 
 2. **Automated pipeline:**
