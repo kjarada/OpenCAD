@@ -3,7 +3,7 @@
   "displayName": "OpenCAD",
   "description": "View and inspect CAD files directly in VS Code. Supports IFC 4x3 (Industry Foundation Classes) with interactive 3D visualization.",
   "version": "0.1.0",
-  "publisher": "opencad",
+  "publisher": "kamaljarada",
   "license": "MIT",
   "icon": "assets/icon.png",
   "galleryBanner": {
