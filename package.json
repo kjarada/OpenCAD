@@ -113,8 +113,8 @@
     "lint": "bun x eslint src --ext .ts",
     "lint:fix": "bun x eslint src --ext .ts --fix",
     "test": "bun ./out/test/runTest.js",
-    "package": "bun x @vscode/vsce package",
-    "publish": "bun x @vscode/vsce publish"
+    "package": "bun x @vscode/vsce package --no-dependencies",
+    "publish": "bun x @vscode/vsce publish --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
