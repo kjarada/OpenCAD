@@ -6,8 +6,8 @@
 
 [![CI](https://github.com/kjarada/OpenCAD/actions/workflows/ci.yml/badge.svg)](https://github.com/kjarada/OpenCAD/actions/workflows/ci.yml)
 [![Release](https://github.com/kjarada/OpenCAD/actions/workflows/release.yml/badge.svg)](https://github.com/kjarada/OpenCAD/actions/workflows/release.yml)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/kamaljarada.opencad?label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad)
-[![Downloads](https://img.shields.io/visual-studio-marketplace/d/kamaljarada.opencad?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/kamaljarada.opencad.svg?label=VS%20Code%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad)
+[![Downloads](https://vsmarketplacebadges.dev/downloads-short/kamaljarada.opencad.svg)](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 [Install from Marketplace](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad) · [Report Bug](https://github.com/kjarada/OpenCAD/issues) · [Request Feature](https://github.com/kjarada/OpenCAD/issues)
