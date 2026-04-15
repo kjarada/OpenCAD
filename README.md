@@ -4,13 +4,13 @@
 
 **View and inspect CAD files directly in Visual Studio Code**
 
-[![CI](https://github.com/opencad/opencad-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/opencad/opencad-vscode/actions/workflows/ci.yml)
-[![Release](https://github.com/opencad/opencad-vscode/actions/workflows/release.yml/badge.svg)](https://github.com/opencad/opencad-vscode/actions/workflows/release.yml)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/opencad.opencad?label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=opencad.opencad)
-[![Downloads](https://img.shields.io/visual-studio-marketplace/d/opencad.opencad?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=opencad.opencad)
+[![CI](https://github.com/kjarada/OpenCAD/actions/workflows/ci.yml/badge.svg)](https://github.com/kjarada/OpenCAD/actions/workflows/ci.yml)
+[![Release](https://github.com/kjarada/OpenCAD/actions/workflows/release.yml/badge.svg)](https://github.com/kjarada/OpenCAD/actions/workflows/release.yml)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/kamaljarada.opencad?label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad)
+[![Downloads](https://img.shields.io/visual-studio-marketplace/d/kamaljarada.opencad?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-[Install from Marketplace](https://marketplace.visualstudio.com/items?itemName=opencad.opencad) · [Report Bug](https://github.com/opencad/opencad-vscode/issues) · [Request Feature](https://github.com/opencad/opencad-vscode/issues)
+[Install from Marketplace](https://marketplace.visualstudio.com/items?itemName=kamaljarada.opencad) · [Report Bug](https://github.com/kjarada/OpenCAD/issues) · [Request Feature](https://github.com/kjarada/OpenCAD/issues)
 
 </div>
 
@@ -37,11 +37,11 @@ Built for architects, engineers, and developers working with Building Informatio
 - **🖥️ Native VS Code Integration** — Opens IFC files as a custom editor tab, just like any other file
 - **🎮 Interactive 3D Viewer** — Orbit, pan, and zoom with mouse controls
 - **📐 IFC 4x3 Support** — Full support for the latest IFC standard (ISO 16739-1:2024)
-- **⚡ WASM-Powered** — Uses WebAssembly for fast, native-speed IFC parsing
+- **🔩 IfcOpenShell Powered** — Uses the battle-tested IfcOpenShell C++ geometry engine for accurate IFC parsing
 - **🔧 Toolbar Controls** — Wireframe mode, camera reset, fit-to-view, projection toggle
 - **🎨 Theme-Aware** — Adapts to your VS Code color theme
 - **📊 Model Info** — Displays element count and file details
-- **🪶 Lightweight** — No external dependencies or software required
+- **🪶 Lightweight** — Auto-downloads the IfcConvert binary on first use (~20 MB, one-time)
 
 ## Installation
 
@@ -55,12 +55,12 @@ Built for architects, engineers, and developers working with Building Informatio
 ### From Command Line
 
 ```bash
-code --install-extension opencad.opencad
+code --install-extension kamaljarada.opencad
 ```
 
 ### From VSIX
 
-Download the latest `.vsix` from [Releases](https://github.com/opencad/opencad-vscode/releases), then:
+Download the latest `.vsix` from [Releases](https://github.com/kjarada/OpenCAD/releases), then:
 
 ```bash
 code --install-extension opencad-0.1.0.vsix
@@ -110,9 +110,10 @@ OpenCAD
 ├── src/
 │   ├── extension.ts          # VS Code extension entry point
 │   ├── ifcEditorProvider.ts   # Custom editor provider for IFC files
+│   ├── ifcConvertManager.ts   # Downloads & runs IfcConvert binary
 │   └── webview/
 │       ├── main.ts            # Webview entry point & message handling
-│       ├── viewer.ts          # Three.js scene, camera, IFC loading
+│       ├── viewer.ts          # Three.js scene, GLB loading, camera
 │       └── toolbar.ts         # Toolbar button handlers
 ├── .github/workflows/
 │   ├── ci.yml                 # CI: lint, build, test
@@ -120,11 +121,18 @@ OpenCAD
 └── assets/                    # Icons and static assets
 ```
 
+### How It Works
+
+1. User opens an `.ifc` file in VS Code
+2. Extension host downloads [IfcConvert](https://github.com/IfcOpenShell/IfcOpenShell) (one-time, cached)
+3. IfcConvert converts the IFC file to GLB (binary glTF) using the IfcOpenShell C++ engine
+4. GLB data is sent to the webview via `postMessage`
+5. Three.js `GLTFLoader` renders the 3D model
+
 ### Technology Stack
 
+- **[IfcOpenShell](https://ifcopenshell.org/)** — C++ IFC geometry engine (via IfcConvert CLI)
 - **[Three.js](https://threejs.org/)** — 3D rendering engine
-- **[web-ifc](https://github.com/IFCjs/web-ifc)** — WebAssembly IFC parser
-- **[web-ifc-three](https://github.com/IFCjs/web-ifc-three)** — Three.js IFC integration
 - **[Webpack](https://webpack.js.org/)** — Module bundling for extension and webview
 - **[TypeScript](https://www.typescriptlang.org/)** — Type-safe development
 - **[Bun](https://bun.sh/)** — Fast JavaScript runtime and package manager
@@ -140,8 +148,8 @@ OpenCAD
 
 ```bash
 # Clone the repository
-git clone https://github.com/opencad/opencad-vscode.git
-cd opencad-vscode
+git clone https://github.com/kjarada/OpenCAD.git
+cd OpenCAD
 
 # Install dependencies
 bun install
@@ -216,7 +224,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ## Acknowledgments
 
-- [IFC.js](https://ifcjs.github.io/info/) — The open-source IFC toolkit that powers the parsing engine
+- [IfcOpenShell](https://ifcopenshell.org/) — The open-source C++ IFC geometry engine that powers the conversion
 - [Three.js](https://threejs.org/) — The 3D library that makes browser-based visualization possible
 - [buildingSMART](https://www.buildingsmart.org/) — Maintainers of the IFC standard
 

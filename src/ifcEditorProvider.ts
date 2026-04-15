@@ -1,11 +1,15 @@
 import * as vscode from "vscode";
+import { IfcConvertManager } from "./ifcConvertManager";
 
 export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
   public static readonly viewType = "opencad.ifcViewer";
 
   private activeWebviewPanel: vscode.WebviewPanel | undefined;
+  private readonly ifcConvert: IfcConvertManager;
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  constructor(private readonly context: vscode.ExtensionContext) {
+    this.ifcConvert = new IfcConvertManager(context);
+  }
 
   public async openCustomDocument(
     uri: vscode.Uri,
@@ -41,13 +45,22 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
       []
     );
 
-    // Send the file data to the webview
-    const fileData = await vscode.workspace.fs.readFile(document.uri);
-    webviewPanel.webview.postMessage({
-      type: "loadFile",
-      data: Array.from(fileData),
-      fileName: document.uri.fsPath,
-    });
+    // Convert IFC to GLB using IfcConvert, then send to webview
+    try {
+      const glbData = await this.ifcConvert.convertToGlb(document.uri.fsPath);
+      webviewPanel.webview.postMessage({
+        type: "loadGlb",
+        data: Array.from(glbData),
+        fileName: document.uri.fsPath,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      vscode.window.showErrorMessage(`OpenCAD: Failed to convert IFC file — ${errorMessage}`);
+      webviewPanel.webview.postMessage({
+        type: "conversionError",
+        message: errorMessage,
+      });
+    }
 
     // Register internal command for posting messages to webview
     const disposable = vscode.commands.registerCommand(
@@ -109,14 +122,6 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
       )
     );
 
-    const wasmUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this.context.extensionUri,
-        "dist",
-        "webview"
-      )
-    );
-
     const nonce = getNonce();
 
     return /* html */ `<!DOCTYPE html>
@@ -127,11 +132,10 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
   <meta http-equiv="Content-Security-Policy" content="
     default-src 'none';
     img-src ${webview.cspSource} blob: data:;
-    script-src 'nonce-${nonce}' 'unsafe-eval' 'wasm-unsafe-eval' ${webview.cspSource};
+    script-src 'nonce-${nonce}' ${webview.cspSource};
     style-src ${webview.cspSource} 'unsafe-inline';
     font-src ${webview.cspSource};
     connect-src ${webview.cspSource} blob: data:;
-    worker-src blob:;
   ">
   <title>OpenCAD Viewer</title>
   <style>
@@ -254,9 +258,6 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
       <div><span class="label">File: </span><span id="info-file">-</span></div>
     </div>
   </div>
-  <script nonce="${nonce}">
-    window.__WASM_PATH__ = "${wasmUri}";
-  </script>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

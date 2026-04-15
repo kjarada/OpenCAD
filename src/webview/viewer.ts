@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { IFCLoader } from "web-ifc-three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 export interface ModelInfo {
   elementCount: number;
@@ -14,14 +14,13 @@ export class IFCViewer {
   private container: HTMLElement;
   private grid: THREE.GridHelper | null = null;
   private axes: THREE.AxesHelper | null = null;
-  private ifcLoader: IFCLoader | null = null;
+  private gltfLoader: GLTFLoader;
   private model: THREE.Object3D | null = null;
   private wireframeMode = false;
-  private wasmPath: string;
 
-  constructor(container: HTMLElement, wasmPath: string) {
+  constructor(container: HTMLElement) {
     this.container = container;
-    this.wasmPath = wasmPath;
+    this.gltfLoader = new GLTFLoader();
 
     // Scene
     this.scene = new THREE.Scene();
@@ -71,7 +70,6 @@ export class IFCViewer {
     this.setupLights();
     this.setupGrid();
     this.setupAxes();
-    await this.setupIFCLoader();
   }
 
   private setupLights(): void {
@@ -115,66 +113,52 @@ export class IFCViewer {
     this.scene.add(this.axes);
   }
 
-  private async setupIFCLoader(): Promise<void> {
-    this.ifcLoader = new IFCLoader();
-    // Use absolute path so web-ifc's locateFile returns the full webview URI directly
-    const api = this.ifcLoader.ifcManager.state.api as unknown as {
-      SetWasmPath(path: string, absolute?: boolean): void;
-    };
-    api.SetWasmPath(this.wasmPath + "/", true);
-  }
-
-  async loadIFC(data: Uint8Array): Promise<ModelInfo> {
-    if (!this.ifcLoader) {
-      throw new Error("IFC loader not initialized");
-    }
-
+  async loadGlb(data: Uint8Array): Promise<ModelInfo> {
     // Remove previous model
     if (this.model) {
       this.scene.remove(this.model);
       this.model = null;
     }
 
-    // Create a blob URL from the data
-    const blob = new Blob([data.buffer as ArrayBuffer], { type: "application/octet-stream" });
-    const url = URL.createObjectURL(blob);
+    const buffer = data.buffer instanceof ArrayBuffer
+      ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+      : data.slice().buffer;
 
-    try {
-      const model = await new Promise<THREE.Object3D>((resolve, reject) => {
-        this.ifcLoader!.load(
-          url,
-          (m) => resolve(m),
-          undefined,
-          (err) => reject(err)
-        );
-      });
+    return new Promise<ModelInfo>((resolve, reject) => {
+      this.gltfLoader.parse(
+        buffer as ArrayBuffer,
+        "",
+        (gltf) => {
+          const modelGroup = gltf.scene;
+          let elementCount = 0;
 
-      this.model = model;
-      this.scene.add(model);
+          // Enable shadows on all meshes
+          modelGroup.traverse((child: THREE.Object3D) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const mesh = child as THREE.Mesh;
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              elementCount++;
+            }
+          });
 
-      // Count elements
-      let elementCount = 0;
-      model.traverse((child: THREE.Object3D) => {
-        if ((child as THREE.Mesh).isMesh) {
-          elementCount++;
-          (child as THREE.Mesh).castShadow = true;
-          (child as THREE.Mesh).receiveShadow = true;
+          this.model = modelGroup;
+          this.scene.add(modelGroup);
+          this.fitToView();
+
+          // Hide loading overlay
+          const overlay = document.getElementById("loading-overlay");
+          if (overlay) {
+            overlay.classList.add("hidden");
+          }
+
+          resolve({ elementCount });
+        },
+        (error) => {
+          reject(new Error(`Failed to parse GLB: ${error.message}`));
         }
-      });
-
-      // Fit camera to model
-      this.fitToView();
-
-      // Hide loading overlay
-      const overlay = document.getElementById("loading-overlay");
-      if (overlay) {
-        overlay.classList.add("hidden");
-      }
-
-      return { elementCount };
-    } finally {
-      URL.revokeObjectURL(url);
-    }
+      );
+    });
   }
 
   fitToView(): void {

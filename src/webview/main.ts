@@ -1,12 +1,6 @@
 import { IFCViewer } from "./viewer";
 import { setupToolbar } from "./toolbar";
 
-declare global {
-  interface Window {
-    __WASM_PATH__: string;
-  }
-}
-
 interface VsCodeApi {
   postMessage(message: unknown): void;
   getState(): unknown;
@@ -22,7 +16,7 @@ let viewer: IFCViewer | null = null;
 async function init(): Promise<void> {
   const viewport = document.getElementById("viewport")!;
 
-  viewer = new IFCViewer(viewport, window.__WASM_PATH__);
+  viewer = new IFCViewer(viewport);
   await viewer.init();
 
   setupToolbar(viewer);
@@ -34,16 +28,16 @@ window.addEventListener("message", async (event) => {
   const message = event.data;
 
   switch (message.type) {
-    case "loadFile": {
+    case "loadGlb": {
       const loadingText = document.getElementById("loading-text");
       if (loadingText) {
-        loadingText.textContent = "Loading IFC model...";
+        loadingText.textContent = "Loading model...";
       }
 
       try {
         const data = new Uint8Array(message.data);
         if (viewer) {
-          const info = await viewer.loadIFC(data);
+          const info = await viewer.loadGlb(data);
           updateInfoPanel(info, message.fileName);
         }
       } catch (err) {
@@ -53,6 +47,13 @@ window.addEventListener("message", async (event) => {
         if (loadingText) {
           loadingText.textContent = `Error: ${errorMessage}`;
         }
+      }
+      break;
+    }
+    case "conversionError": {
+      const loadingText = document.getElementById("loading-text");
+      if (loadingText) {
+        loadingText.textContent = `Conversion failed: ${message.message}`;
       }
       break;
     }

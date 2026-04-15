@@ -2,15 +2,15 @@
 
 ## Project Overview
 
-OpenCAD is a VS Code extension for viewing CAD files (starting with IFC 4x3). It renders 3D models in a webview using Three.js and web-ifc (WASM-based IFC parser).
+OpenCAD is a VS Code extension for viewing CAD files (starting with IFC 4x3). It uses IfcOpenShell's IfcConvert (C++ binary) to convert IFC to GLB, then renders the 3D model in a webview using Three.js.
 
 ## Tech Stack
 
 - **Runtime / Package Manager**: Bun (exclusively — the ONLY package manager and script runner for this project)
 - **Language**: TypeScript (strict mode)
 - **Bundler**: Webpack (dual config — Node extension + web webview)
-- **3D Engine**: Three.js
-- **IFC Parser**: web-ifc + web-ifc-three (WASM)
+- **3D Engine**: Three.js (GLTFLoader for rendering)
+- **IFC Engine**: IfcOpenShell IfcConvert (native C++ binary, IFC → GLB conversion)
 - **Linting**: ESLint with @typescript-eslint
 - **CI/CD**: GitHub Actions with `oven-sh/setup-bun`
 
@@ -18,15 +18,16 @@ OpenCAD is a VS Code extension for viewing CAD files (starting with IFC 4x3). It
 
 The extension has two isolated execution contexts:
 
-1. **Extension Host** (Node.js context) — `src/extension.ts`, `src/ifcEditorProvider.ts`
+1. **Extension Host** (Node.js context) — `src/extension.ts`, `src/ifcEditorProvider.ts`, `src/ifcConvertManager.ts`
    - Registers the custom editor provider for `.ifc` files
-   - Reads file data from disk and passes it to the webview via `postMessage`
+   - Downloads IfcConvert binary on first use (cached in global storage)
+   - Converts IFC → GLB via IfcConvert subprocess
+   - Sends GLB bytes to the webview via `postMessage`
    - Handles VS Code commands
 
 2. **Webview** (browser context) — `src/webview/`
-   - Receives IFC file bytes from the extension host
-   - Uses web-ifc (WASM) to parse IFC data
-   - Renders 3D scene with Three.js
+   - Receives GLB bytes from the extension host
+   - Renders 3D scene with Three.js GLTFLoader
    - Cannot access Node.js or VS Code APIs directly
 
 Communication between the two is exclusively via `postMessage` / `onDidReceiveMessage`.
@@ -50,8 +51,9 @@ Communication between the two is exclusively via `postMessage` / `onDidReceiveMe
 |------|---------|
 | `src/extension.ts` | Extension activation, command registration |
 | `src/ifcEditorProvider.ts` | CustomReadonlyEditorProvider for IFC files |
+| `src/ifcConvertManager.ts` | Downloads & runs IfcConvert binary |
 | `src/webview/main.ts` | Webview entry point, message handling |
-| `src/webview/viewer.ts` | Three.js scene, IFC loading, camera controls |
+| `src/webview/viewer.ts` | Three.js scene, GLB loading, camera controls |
 | `src/webview/toolbar.ts` | Toolbar button event handlers |
 | `webpack.config.js` | Dual webpack config (extension + webview) |
 
@@ -79,7 +81,8 @@ This project **exclusively** uses [Bun](https://bun.sh) as its package manager a
 ## Important Constraints
 
 - The webview runs in a sandboxed iframe — no Node.js APIs
-- WASM files (web-ifc) must be copied to `dist/webview/` via CopyWebpackPlugin
+- IfcConvert binary is auto-downloaded on first use and cached in `context.globalStorageUri`
 - `retainContextWhenHidden: true` is set to keep 3D state when the tab is hidden
 - The extension uses `CustomReadonlyEditorProvider` (read-only — no save/edit)
 - Three.js imports in the webview must use the `/examples/jsm/` path for tree-shaking
+- The extension requires internet access on first use to download IfcConvert (~20 MB)

@@ -2,7 +2,6 @@
 // @ts-check
 
 const path = require("path");
-const CopyPlugin = require("copy-webpack-plugin");
 
 /** @type {import('webpack').Configuration} */
 const extensionConfig = {
@@ -72,22 +71,8 @@ const webviewConfig = {
           },
         ],
       },
-      {
-        test: /\.css$/,
-        use: ["style-loader", "css-loader"],
-      },
     ],
   },
-  plugins: [
-    new CopyPlugin({
-      patterns: [
-        {
-          from: "node_modules/web-ifc/*.wasm",
-          to: "[name][ext]",
-        },
-      ],
-    }),
-  ],
   devtool: "nosources-source-map",
 };
 

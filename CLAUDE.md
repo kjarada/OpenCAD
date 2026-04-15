@@ -17,10 +17,11 @@ OpenCAD is a VS Code extension that views IFC (Industry Foundation Classes) CAD 
 ```
 src/
 ├── extension.ts            ← VS Code extension entry (Node.js)
-├── ifcEditorProvider.ts    ← Custom editor: reads .ifc, creates webview
+├── ifcEditorProvider.ts    ← Custom editor: reads .ifc, runs IfcConvert, creates webview
+├── ifcConvertManager.ts    ← Downloads & runs IfcConvert binary (IFC → GLB)
 └── webview/
-    ├── main.ts             ← Webview entry: receives file data, manages viewer
-    ├── viewer.ts           ← Three.js scene, IFC loading via web-ifc
+    ├── main.ts             ← Webview entry: receives GLB data, manages viewer
+    ├── viewer.ts           ← Three.js scene, GLB loading via GLTFLoader
     └── toolbar.ts          ← UI button handlers
 ```
 
@@ -29,10 +30,10 @@ src/
 ```
 User opens .ifc file
   → VS Code calls IFCEditorProvider.resolveCustomEditor()
-  → Extension reads file bytes via vscode.workspace.fs.readFile()
-  → Extension sends bytes to webview via postMessage({ type: "loadFile", data })
-  → Webview receives data, creates Blob URL
-  → IFCLoader (web-ifc WASM) parses the blob
+  → Extension runs IfcConvert binary (IFC → GLB conversion)
+  → Extension sends GLB bytes to webview via postMessage({ type: "loadGlb", data })
+  → Webview receives GLB data
+  → Three.js GLTFLoader parses the GLB
   → Three.js renders the model in the viewport
 ```
 
@@ -43,8 +44,8 @@ User opens .ifc file
 | Runtime | Bun |
 | Language | TypeScript 5+ (strict) |
 | Bundler | Webpack 5 (dual config) |
-| 3D | Three.js |
-| IFC Parser | web-ifc (WASM) + web-ifc-three |
+| 3D | Three.js (GLTFLoader) |
+| IFC Engine | IfcOpenShell IfcConvert (C++ binary) |
 | Lint | ESLint + @typescript-eslint |
 | CI | GitHub Actions + oven-sh/setup-bun |
 
@@ -76,6 +77,7 @@ Press `F5` in VS Code to launch Extension Development Host with the extension lo
 ## Security
 
 - Webview content is sandboxed; CSP prevents inline scripts (except via nonce)
-- File data is transferred as `Uint8Array` — no eval or dynamic code execution
-- WASM is loaded from the extension's own dist folder, not from CDN
-- No network requests are made; everything is local
+- GLB data is transferred as `Uint8Array` — no eval or dynamic code execution
+- IfcConvert binary is downloaded from official IfcOpenShell GitHub releases
+- Binary is cached in `context.globalStorageUri` (VS Code global storage)
+- The extension requires internet on first use to download IfcConvert (~20 MB)
