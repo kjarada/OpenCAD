@@ -1,23 +1,41 @@
-# Sample IFC Files
+# Sample Files
 
-These IFC 4x3 (IFC4X3_ADD2) sample files are sourced from the [buildingSMART Sample-Test-Files](https://github.com/buildingSMART/Sample-Test-Files) repository and are included here for convenient testing.
+Test files for all supported formats. Press **F5** in VS Code and open any file to test.
 
-## Files
+## IFC
 
-| File | Description | Size |
-|------|-------------|------|
-| `Building-Architecture.ifc` | Architectural building model | ~216 KB |
-| `Building-Structural.ifc` | Structural building model | ~285 KB |
-| `Building-Hvac.ifc` | HVAC building model | ~175 KB |
-| `Infra-Bridge.ifc` | Infrastructure bridge model | ~1.8 MB |
-| `Infra-Road.ifc` | Infrastructure road model | ~407 KB |
+IFC 4x3 samples from [buildingSMART Sample-Test-Files](https://github.com/buildingSMART/Sample-Test-Files) (MIT License).
 
-## Usage
+| File | Description |
+|------|-------------|
+| `ifc/Building-Architecture.ifc` | Architectural building model |
+| `ifc/Building-Structural.ifc` | Structural building model |
+| `ifc/Building-Hvac.ifc` | HVAC building model |
+| `ifc/Infra-Bridge.ifc` | Infrastructure bridge model |
+| `ifc/Infra-Road.ifc` | Infrastructure road model |
 
-1. Press **F5** in VS Code to launch the Extension Development Host
-2. Open any `.ifc` file from this folder
-3. The 3D viewer will load and render the model
+## DXF
 
-## License
+DXF samples from [mozman/ezdxf](https://github.com/mozman/ezdxf) (MIT License).
 
-These files are from the [buildingSMART Sample-Test-Files](https://github.com/buildingSMART/Sample-Test-Files) repository and are provided under their original [MIT License](https://github.com/buildingSMART/Sample-Test-Files/blob/main/LICENSE).
+| File | Description |
+|------|-------------|
+| `dxf/uncommon.dxf` | Technical drawing with lines, dimensions, splines, polylines, arcs |
+| `dxf/colors.dxf` | Color and layer demonstration with circles, polylines, blocks |
+
+## KML
+
+| File | Source | Description |
+|------|--------|-------------|
+| `kml/KML_Samples.kml` | [Google KML Docs](https://developers.google.com/kml/documentation/) | Official KML reference: points, lines, polygons, styles |
+| `kml/USGS_Earthquakes_2025-01-01.kml` | [USGS Earthquake Hazards](https://earthquake.usgs.gov/) | Real seismic data: 60 point features globally |
+
+## Shapefile
+
+Shapefiles from [Natural Earth](https://www.naturalearthdata.com/) (public domain).
+
+| File | Description |
+|------|-------------|
+| `shp/ne_110m_admin_0_countries.*` | World country boundaries (polygons) |
+| `shp/ne_110m_rivers_lake_centerlines.*` | Major world rivers (polylines) |
+| `shp/ne_110m_lakes.*` | Major world lakes (polygons) |

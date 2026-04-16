@@ -141,7 +141,8 @@ OpenCAD
 │       ├── viewer.ts             # Three.js scene, GLB + geometry loading
 │       ├── geometryRenderer.ts   # GeometryData → Three.js objects
 │       └── toolbar.ts            # Toolbar button handlers
-├── examples/                     # Sample files for each format
+├── samples/                      # Real-world test files for each format
+├── tests/                        # Converter test scripts
 ├── .github/workflows/
 │   ├── ci.yml                    # CI: lint, build, test
 │   └── release.yml               # Release: package, publish
@@ -208,13 +209,13 @@ bun run watch
 
 ```bash
 # Test converter parsing (requires bun)
-bun examples/test-converters.ts
+bun tests/test-converters.ts
 
 # Test full converter pipeline
-bun examples/test-full-pipeline.ts
+bun tests/test-full-pipeline.ts
 
-# Test edge cases
-bun examples/test-edge-cases.ts
+# Test edge cases (29 tests)
+bun tests/test-edge-cases.ts
 ```
 
 ### Building a VSIX Package

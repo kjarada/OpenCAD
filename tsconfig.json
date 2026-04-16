@@ -21,6 +21,7 @@
     "out",
     ".vscode-test",
     "src/webview",
-    "examples"
+    "examples",
+    "tests"
   ]
 }
