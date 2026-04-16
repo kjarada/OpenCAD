@@ -1,6 +1,9 @@
 import * as vscode from "vscode";
 import * as path from "path";
 import { getConverter, initConverterRegistry } from "./converters/converterRegistry";
+import type { ConversionResult } from "./converters/converter";
+
+const log = vscode.window.createOutputChannel("OpenCAD", { log: true });
 
 export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
   public static readonly viewType = "opencad.cadViewer";
@@ -39,68 +42,84 @@ export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
       document.uri
     );
 
-    // Wait for the webview to signal it is ready before sending data.
-    // Fast converters (DXF, KML, SHP) finish before the webview JS loads,
-    // so without this the postMessage is lost.
-    const webviewReady = new Promise<void>((resolve) => {
-      const disposableListener = webviewPanel.webview.onDidReceiveMessage(
-        (message: { type: string }) => {
-          if (message.type === "ready") {
-            disposableListener.dispose();
-            resolve();
-          }
-        }
-      );
-    });
-
-    webviewPanel.webview.onDidReceiveMessage(
-      (message) => this.handleMessage(message, webviewPanel),
-      undefined,
-      []
-    );
-
-    // Determine file format and convert
     const ext = path.extname(document.uri.fsPath).toLowerCase();
     const converter = getConverter(ext);
 
+    log.info(`[host] Opening: ${document.uri.fsPath} (ext=${ext})`);
+    log.info(`[host] Converter: ${converter ? converter.formatName : "NONE"}`);
+    log.show(true);
+
+    // Start conversion immediately (don't wait for webview)
+    let conversionResult: ConversionResult | null = null;
+    let conversionError: string | null = null;
+
     if (!converter) {
-      const errorMessage = `Unsupported file format: ${ext}`;
-      vscode.window.showErrorMessage(`OpenCAD: ${errorMessage}`);
-      await webviewReady;
-      webviewPanel.webview.postMessage({
-        type: "conversionError",
-        message: errorMessage,
-      });
+      conversionError = `Unsupported file format: ${ext}`;
+      log.error(`[host] ${conversionError}`);
     } else {
       try {
-        // Convert and wait for webview in parallel
-        const [result] = await Promise.all([
-          converter.convert(document.uri.fsPath),
-          webviewReady,
-        ]);
-        if (result.kind === "glb") {
-          webviewPanel.webview.postMessage({
-            type: "loadGlb",
-            data: Array.from(result.data),
-            fileName: document.uri.fsPath,
-          });
-        } else {
-          webviewPanel.webview.postMessage({
-            type: "loadGeometry",
-            data: result.data,
-            fileName: document.uri.fsPath,
-          });
+        log.info(`[host] Converting...`);
+        conversionResult = await converter.convert(document.uri.fsPath);
+        log.info(`[host] Conversion done: kind=${conversionResult.kind}`);
+        if (conversionResult.kind === "geometry") {
+          log.info(`[host]   entities=${conversionResult.data.entities.length} layers=${conversionResult.data.layers.length}`);
+          log.info(`[host]   bounds=[${conversionResult.data.bounds.min.x.toFixed(1)},${conversionResult.data.bounds.min.y.toFixed(1)},${conversionResult.data.bounds.min.z.toFixed(1)}]→[${conversionResult.data.bounds.max.x.toFixed(1)},${conversionResult.data.bounds.max.y.toFixed(1)},${conversionResult.data.bounds.max.z.toFixed(1)}]`);
         }
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`OpenCAD: Failed to load file — ${errorMessage}`);
-        await webviewReady;
-        webviewPanel.webview.postMessage({
-          type: "conversionError",
-          message: errorMessage,
-        });
+        conversionError = err instanceof Error ? err.message : String(err);
+        log.error(`[host] Conversion failed: ${conversionError}`);
+        vscode.window.showErrorMessage(`OpenCAD: Failed to load file — ${conversionError}`);
       }
     }
+
+    // Send data to webview when it asks for it (pull model).
+    // Also handle messages from webview.
+    webviewPanel.webview.onDidReceiveMessage(
+      (message: { type: string; [key: string]: unknown }) => {
+        log.info(`[host] Got message from webview: ${message.type}`);
+
+        switch (message.type) {
+          case "ready":
+            // Webview is ready — send the converted data
+            log.info(`[host] Webview ready — sending data`);
+            if (conversionError) {
+              webviewPanel.webview.postMessage({
+                type: "conversionError",
+                message: conversionError,
+              });
+            } else if (conversionResult) {
+              if (conversionResult.kind === "glb") {
+                webviewPanel.webview.postMessage({
+                  type: "loadGlb",
+                  data: Array.from(conversionResult.data),
+                  fileName: document.uri.fsPath,
+                });
+                log.info(`[host] Sent loadGlb (${conversionResult.data.length} bytes)`);
+              } else {
+                webviewPanel.webview.postMessage({
+                  type: "loadGeometry",
+                  data: conversionResult.data,
+                  fileName: document.uri.fsPath,
+                });
+                log.info(`[host] Sent loadGeometry (${conversionResult.data.entities.length} entities)`);
+              }
+            }
+            break;
+          case "error":
+            log.error(`[webview] ${message.message as string}`);
+            vscode.window.showErrorMessage(`OpenCAD: ${message.message as string}`);
+            break;
+          case "info":
+            log.info(`[webview] ${message.message as string}`);
+            break;
+          case "log":
+            log.info(`[webview] ${message.message as string}`);
+            break;
+        }
+      },
+      undefined,
+      []
+    );
 
     // Register internal command for posting messages to webview
     const disposable = vscode.commands.registerCommand(
@@ -124,29 +143,6 @@ export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
         this.activeWebviewPanel = webviewPanel;
       }
     });
-  }
-
-  private handleMessage(
-    message: { type: string; [key: string]: unknown },
-    _panel: vscode.WebviewPanel
-  ): void {
-    switch (message.type) {
-      case "ready":
-        break;
-      case "error":
-        vscode.window.showErrorMessage(
-          `OpenCAD: ${message.message as string}`
-        );
-        break;
-      case "info":
-        vscode.window.showInformationMessage(
-          `OpenCAD: ${message.message as string}`
-        );
-        break;
-      case "modelInfo":
-        // Could show in a tree view or output channel in the future
-        break;
-    }
   }
 
   private getHtmlForWebview(
