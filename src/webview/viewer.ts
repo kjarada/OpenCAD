@@ -175,15 +175,20 @@ export class IFCViewer {
     this.model = result.group;
     this.scene.add(result.group);
 
-    // For geographic data, start with a top-down camera angle
-    if (data.coordinateSystem === "geographic") {
-      const box = new THREE.Box3().setFromObject(result.group);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.z);
-      const distance = maxDim * 1.2;
+    // Adjust camera clipping planes to fit the geometry scale
+    const box = new THREE.Box3().setFromObject(result.group);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z, 1);
+    this.camera.near = maxDim * 0.0001;
+    this.camera.far = maxDim * 20;
+    this.camera.updateProjectionMatrix();
+    this.controls.maxDistance = maxDim * 10;
 
-      this.camera.position.set(center.x, center.y + distance, center.z);
+    if (data.coordinateSystem === "geographic") {
+      // Top-down view for geographic data
+      const center = box.getCenter(new THREE.Vector3());
+      const distance = maxDim * 1.2;
+      this.camera.position.set(center.x, center.y + distance, center.z + distance * 0.01);
       this.camera.lookAt(center);
       this.controls.target.copy(center);
       this.controls.update();
