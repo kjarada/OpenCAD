@@ -1,14 +1,14 @@
 import * as vscode from "vscode";
-import { IfcConvertManager } from "./ifcConvertManager";
+import * as path from "path";
+import { getConverter, initConverterRegistry } from "./converters/converterRegistry";
 
-export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
-  public static readonly viewType = "opencad.ifcViewer";
+export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
+  public static readonly viewType = "opencad.cadViewer";
 
   private activeWebviewPanel: vscode.WebviewPanel | undefined;
-  private readonly ifcConvert: IfcConvertManager;
 
   constructor(private readonly context: vscode.ExtensionContext) {
-    this.ifcConvert = new IfcConvertManager(context);
+    initConverterRegistry(context);
   }
 
   public async openCustomDocument(
@@ -45,21 +45,41 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
       []
     );
 
-    // Convert IFC to GLB using IfcConvert, then send to webview
-    try {
-      const glbData = await this.ifcConvert.convertToGlb(document.uri.fsPath);
-      webviewPanel.webview.postMessage({
-        type: "loadGlb",
-        data: Array.from(glbData),
-        fileName: document.uri.fsPath,
-      });
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      vscode.window.showErrorMessage(`OpenCAD: Failed to convert IFC file — ${errorMessage}`);
+    // Determine file format and convert
+    const ext = path.extname(document.uri.fsPath).toLowerCase();
+    const converter = getConverter(ext);
+
+    if (!converter) {
+      const errorMessage = `Unsupported file format: ${ext}`;
+      vscode.window.showErrorMessage(`OpenCAD: ${errorMessage}`);
       webviewPanel.webview.postMessage({
         type: "conversionError",
         message: errorMessage,
       });
+    } else {
+      try {
+        const result = await converter.convert(document.uri.fsPath);
+        if (result.kind === "glb") {
+          webviewPanel.webview.postMessage({
+            type: "loadGlb",
+            data: Array.from(result.data),
+            fileName: document.uri.fsPath,
+          });
+        } else {
+          webviewPanel.webview.postMessage({
+            type: "loadGeometry",
+            data: result.data,
+            fileName: document.uri.fsPath,
+          });
+        }
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        vscode.window.showErrorMessage(`OpenCAD: Failed to load file — ${errorMessage}`);
+        webviewPanel.webview.postMessage({
+          type: "conversionError",
+          message: errorMessage,
+        });
+      }
     }
 
     // Register internal command for posting messages to webview
@@ -245,7 +265,7 @@ export class IFCEditorProvider implements vscode.CustomReadonlyEditorProvider {
   <div id="viewport">
     <div id="loading-overlay">
       <div class="spinner"></div>
-      <div id="loading-text">Loading IFC model...</div>
+      <div id="loading-text">Loading model...</div>
     </div>
     <div id="toolbar">
       <button class="toolbar-btn" id="btn-fit" title="Fit to View">⊞</button>

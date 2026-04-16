@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Landmark Examples</name>
+    <description>Sample KML with various geometry types</description>
+
+    <Style id="redLine">
+      <LineStyle>
+        <color>ff0000ff</color>
+        <width>3</width>
+      </LineStyle>
+    </Style>
+
+    <Style id="bluePolygon">
+      <PolyStyle>
+        <color>7fff0000</color>
+      </PolyStyle>
+      <LineStyle>
+        <color>ffff0000</color>
+        <width>2</width>
+      </LineStyle>
+    </Style>
+
+    <Placemark>
+      <name>Central Point</name>
+      <description>A point marker in downtown</description>
+      <Point>
+        <coordinates>-73.9857,40.7484,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Second Point</name>
+      <Point>
+        <coordinates>-73.9680,40.7614,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Third Point</name>
+      <Point>
+        <coordinates>-73.9712,40.7831,0</coordinates>
+      </Point>
+    </Placemark>
+
+    <Placemark>
+      <name>Sample Path</name>
+      <styleUrl>#redLine</styleUrl>
+      <LineString>
+        <coordinates>
+          -73.9857,40.7484,0
+          -73.9800,40.7520,0
+          -73.9750,40.7560,0
+          -73.9680,40.7614,0
+          -73.9650,40.7680,0
+          -73.9680,40.7750,0
+          -73.9712,40.7831,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+
+    <Placemark>
+      <name>Area Boundary</name>
+      <styleUrl>#bluePolygon</styleUrl>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              -73.9900,40.7450,0
+              -73.9600,40.7450,0
+              -73.9600,40.7600,0
+              -73.9900,40.7600,0
+              -73.9900,40.7450,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+
+    <Placemark>
+      <name>Park Area</name>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>
+              -73.9810,40.7680,0
+              -73.9580,40.7680,0
+              -73.9580,40.7880,0
+              -73.9810,40.7880,0
+              -73.9810,40.7680,0
+            </coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+
+    <Placemark>
+      <name>River</name>
+      <LineString>
+        <coordinates>
+          -74.0000,40.7400,0
+          -73.9950,40.7500,0
+          -73.9900,40.7600,0
+          -73.9880,40.7700,0
+          -73.9850,40.7800,0
+          -73.9830,40.7900,0
+        </coordinates>
+      </LineString>
+    </Placemark>
+
+  </Document>
+</kml>

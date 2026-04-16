@@ -50,6 +50,27 @@ window.addEventListener("message", async (event) => {
       }
       break;
     }
+    case "loadGeometry": {
+      const loadingText = document.getElementById("loading-text");
+      if (loadingText) {
+        loadingText.textContent = "Rendering geometry...";
+      }
+
+      try {
+        if (viewer) {
+          const info = await viewer.loadGeometry(message.data);
+          updateInfoPanel(info, message.fileName);
+        }
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error loading geometry";
+        vscode.postMessage({ type: "error", message: errorMessage });
+        if (loadingText) {
+          loadingText.textContent = `Error: ${errorMessage}`;
+        }
+      }
+      break;
+    }
     case "conversionError": {
       const loadingText = document.getElementById("loading-text");
       if (loadingText) {

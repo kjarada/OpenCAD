@@ -1,12 +1,12 @@
 import * as vscode from "vscode";
-import { IFCEditorProvider } from "./ifcEditorProvider";
+import { CADEditorProvider } from "./cadEditorProvider";
 
 export function activate(context: vscode.ExtensionContext): void {
-  const provider = new IFCEditorProvider(context);
+  const provider = new CADEditorProvider(context);
 
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(
-      IFCEditorProvider.viewType,
+      CADEditorProvider.viewType,
       provider,
       {
         webviewOptions: {
@@ -22,17 +22,21 @@ export function activate(context: vscode.ExtensionContext): void {
       const uri = await vscode.window.showOpenDialog({
         canSelectMany: false,
         filters: {
+          "All CAD/GIS Files": ["ifc", "dxf", "dwg", "kml", "kmz", "shp"],
           "IFC Files": ["ifc"],
-          "All CAD Files": ["ifc"],
+          "DXF Files": ["dxf"],
+          "DWG Files": ["dwg"],
+          "KML/KMZ Files": ["kml", "kmz"],
+          "Shapefiles": ["shp"],
         },
-        title: "Open CAD File",
+        title: "Open CAD/GIS File",
       });
 
       if (uri && uri[0]) {
         await vscode.commands.executeCommand(
           "vscode.openWith",
           uri[0],
-          IFCEditorProvider.viewType
+          CADEditorProvider.viewType
         );
       }
     })

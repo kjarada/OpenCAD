@@ -4,7 +4,7 @@
     "target": "ES2021",
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "outDir": "dist/webview",
-    "rootDir": "src/webview",
+    "rootDir": "src",
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
@@ -12,5 +12,5 @@
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "bundler"
   },
-  "include": ["src/webview/**/*"]
+  "include": ["src/webview/**/*", "src/types/**/*"]
 }

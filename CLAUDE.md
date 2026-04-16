@@ -2,7 +2,7 @@
 
 ## Project
 
-OpenCAD is a VS Code extension that views IFC (Industry Foundation Classes) CAD files with interactive 3D visualization. It targets IFC 4x3 (ISO 16739-1:2024) as the primary standard.
+OpenCAD is a VS Code extension that views CAD and GIS files with interactive 3D visualization. Supported formats: IFC (4x3/4/2x3), DXF, DWG (experimental), KML/KMZ, and Shapefiles.
 
 ## Critical Rules
 
@@ -17,24 +17,40 @@ OpenCAD is a VS Code extension that views IFC (Industry Foundation Classes) CAD 
 ```
 src/
 ├── extension.ts            ← VS Code extension entry (Node.js)
-├── ifcEditorProvider.ts    ← Custom editor: reads .ifc, runs IfcConvert, creates webview
+├── cadEditorProvider.ts    ← Custom editor: detects format, delegates to converter, creates webview
 ├── ifcConvertManager.ts    ← Downloads & runs IfcConvert binary (IFC → GLB)
+├── types/
+│   ├── geometry.ts         ← Shared geometry types (GeometryData, GeometryEntity, etc.)
+│   ├── messages.ts         ← Message protocol types (extension ↔ webview)
+│   ├── togeojson.d.ts      ← Type declaration for @mapbox/togeojson
+│   └── shapefile.d.ts      ← Type declaration for shapefile
+├── converters/
+│   ├── converter.ts        ← FormatConverter interface, ConversionResult union
+│   ├── converterRegistry.ts← Maps file extensions → converter instances
+│   ├── ifcConverter.ts     ← IFC → GLB via IfcConvert binary
+│   ├── dxfConverter.ts     ← DXF → GeometryData via dxf npm
+│   ├── dwgConverter.ts     ← DWG (experimental, suggests DXF export)
+│   ├── kmlConverter.ts     ← KML/KMZ → GeoJSON → GeometryData
+│   ├── shapefileConverter.ts← SHP → GeoJSON → GeometryData
+│   └── geoUtils.ts         ← Geographic projection + GeoJSON → geometry conversion
 └── webview/
-    ├── main.ts             ← Webview entry: receives GLB data, manages viewer
-    ├── viewer.ts           ← Three.js scene, GLB loading via GLTFLoader
+    ├── main.ts             ← Webview entry: handles loadGlb + loadGeometry messages
+    ├── viewer.ts           ← Three.js scene, GLB + geometry loading
+    ├── geometryRenderer.ts ← Converts GeometryData → Three.js objects
     └── toolbar.ts          ← UI button handlers
 ```
 
 ### Data Flow
 
+Two rendering paths through one unified editor provider:
+
 ```
-User opens .ifc file
-  → VS Code calls IFCEditorProvider.resolveCustomEditor()
-  → Extension runs IfcConvert binary (IFC → GLB conversion)
-  → Extension sends GLB bytes to webview via postMessage({ type: "loadGlb", data })
-  → Webview receives GLB data
-  → Three.js GLTFLoader parses the GLB
-  → Three.js renders the model in the viewport
+IFC:  User opens .ifc → IfcConverter (IfcConvert binary) → GLB bytes → GLTFLoader → Three.js
+DXF:  User opens .dxf → DxfConverter (dxf npm parser)    → GeometryData → GeometryRenderer → Three.js
+KML:  User opens .kml → KmlConverter (togeojson + xmldom) → GeometryData → GeometryRenderer → Three.js
+KMZ:  User opens .kmz → KmlConverter (jszip + togeojson)  → GeometryData → GeometryRenderer → Three.js
+SHP:  User opens .shp → ShpConverter (shapefile npm)      → GeometryData → GeometryRenderer → Three.js
+DWG:  User opens .dwg → DwgConverter (experimental)       → Error with guidance to export DXF
 ```
 
 ## Tech Stack
@@ -44,8 +60,11 @@ User opens .ifc file
 | Runtime | Bun |
 | Language | TypeScript 5+ (strict) |
 | Bundler | Webpack 5 (dual config) |
-| 3D | Three.js (GLTFLoader) |
+| 3D | Three.js (GLTFLoader + GeometryRenderer) |
 | IFC Engine | IfcOpenShell IfcConvert (C++ binary) |
+| DXF Parser | dxf npm package |
+| GIS Parsers | @mapbox/togeojson, shapefile, jszip |
+| XML Parser | @xmldom/xmldom |
 | Lint | ESLint + @typescript-eslint |
 | CI | GitHub Actions + oven-sh/setup-bun |
 
@@ -72,7 +91,7 @@ User opens .ifc file
 
 ## Testing
 
-Press `F5` in VS Code to launch Extension Development Host with the extension loaded. Open any `.ifc` file to test.
+Press `F5` in VS Code to launch Extension Development Host with the extension loaded. Open any `.ifc`, `.dxf`, `.kml`, `.kmz`, or `.shp` file to test.
 
 ## Security
 

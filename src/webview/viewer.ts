@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { GeometryData } from "../types/geometry";
+import { buildGeometry } from "./geometryRenderer";
 
 export interface ModelInfo {
   elementCount: number;
@@ -159,6 +161,43 @@ export class IFCViewer {
         }
       );
     });
+  }
+
+  async loadGeometry(data: GeometryData): Promise<ModelInfo> {
+    // Remove previous model
+    if (this.model) {
+      this.scene.remove(this.model);
+      this.model = null;
+    }
+
+    const result = buildGeometry(data);
+
+    this.model = result.group;
+    this.scene.add(result.group);
+
+    // For geographic data, start with a top-down camera angle
+    if (data.coordinateSystem === "geographic") {
+      const box = new THREE.Box3().setFromObject(result.group);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.z);
+      const distance = maxDim * 1.2;
+
+      this.camera.position.set(center.x, center.y + distance, center.z);
+      this.camera.lookAt(center);
+      this.controls.target.copy(center);
+      this.controls.update();
+    } else {
+      this.fitToView();
+    }
+
+    // Hide loading overlay
+    const overlay = document.getElementById("loading-overlay");
+    if (overlay) {
+      overlay.classList.add("hidden");
+    }
+
+    return { elementCount: result.elementCount };
   }
 
   fitToView(): void {

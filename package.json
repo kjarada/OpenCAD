@@ -1,8 +1,8 @@
 {
   "name": "opencad",
   "displayName": "OpenCAD",
-  "description": "View and inspect CAD files directly in VS Code. Supports IFC 4x3 (Industry Foundation Classes) with interactive 3D visualization.",
-  "version": "0.2.0",
+  "description": "View and inspect CAD/GIS files directly in VS Code. Supports IFC, DXF, DWG, KML/KMZ, and Shapefiles with interactive 3D visualization.",
+  "version": "0.3.0",
   "publisher": "kamaljarada",
   "license": "MIT",
   "icon": "assets/icon.png",
@@ -36,18 +36,41 @@
     "engineering",
     "construction",
     "ifc4x3",
-    "industry foundation classes"
+    "industry foundation classes",
+    "dxf",
+    "dwg",
+    "autocad",
+    "shapefile",
+    "gis",
+    "kml",
+    "kmz",
+    "geospatial"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
     "customEditors": [
       {
-        "viewType": "opencad.ifcViewer",
-        "displayName": "IFC Viewer",
+        "viewType": "opencad.cadViewer",
+        "displayName": "CAD/GIS Viewer",
         "selector": [
           {
             "filenamePattern": "*.ifc"
+          },
+          {
+            "filenamePattern": "*.dxf"
+          },
+          {
+            "filenamePattern": "*.dwg"
+          },
+          {
+            "filenamePattern": "*.kml"
+          },
+          {
+            "filenamePattern": "*.kmz"
+          },
+          {
+            "filenamePattern": "*.shp"
           }
         ],
         "priority": "default"
@@ -117,6 +140,7 @@
     "publish": "bun x @vscode/vsce publish --no-dependencies"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
     "@types/node": "^20.11.0",
     "@types/three": "0.162.0",
     "@types/vscode": "^1.85.0",
@@ -130,6 +154,11 @@
     "webpack-cli": "^5.1.0"
   },
   "dependencies": {
+    "@mapbox/togeojson": "^0.16.2",
+    "@xmldom/xmldom": "^0.9.9",
+    "dxf": "^5.3.1",
+    "jszip": "^3.10.1",
+    "shapefile": "^0.6.6",
     "three": "^0.162.0"
   }
 }
