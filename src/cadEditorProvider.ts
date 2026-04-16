@@ -39,6 +39,20 @@ export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
       document.uri
     );
 
+    // Wait for the webview to signal it is ready before sending data.
+    // Fast converters (DXF, KML, SHP) finish before the webview JS loads,
+    // so without this the postMessage is lost.
+    const webviewReady = new Promise<void>((resolve) => {
+      const disposableListener = webviewPanel.webview.onDidReceiveMessage(
+        (message: { type: string }) => {
+          if (message.type === "ready") {
+            disposableListener.dispose();
+            resolve();
+          }
+        }
+      );
+    });
+
     webviewPanel.webview.onDidReceiveMessage(
       (message) => this.handleMessage(message, webviewPanel),
       undefined,
@@ -52,13 +66,18 @@ export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
     if (!converter) {
       const errorMessage = `Unsupported file format: ${ext}`;
       vscode.window.showErrorMessage(`OpenCAD: ${errorMessage}`);
+      await webviewReady;
       webviewPanel.webview.postMessage({
         type: "conversionError",
         message: errorMessage,
       });
     } else {
       try {
-        const result = await converter.convert(document.uri.fsPath);
+        // Convert and wait for webview in parallel
+        const [result] = await Promise.all([
+          converter.convert(document.uri.fsPath),
+          webviewReady,
+        ]);
         if (result.kind === "glb") {
           webviewPanel.webview.postMessage({
             type: "loadGlb",
@@ -75,6 +94,7 @@ export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         vscode.window.showErrorMessage(`OpenCAD: Failed to load file — ${errorMessage}`);
+        await webviewReady;
         webviewPanel.webview.postMessage({
           type: "conversionError",
           message: errorMessage,
