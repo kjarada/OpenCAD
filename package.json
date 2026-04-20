@@ -2,7 +2,7 @@
   "name": "opencad",
   "displayName": "OpenCAD",
   "description": "View and inspect CAD/GIS files directly in VS Code. Supports IFC, DXF, DWG, DGN, KML/KMZ, Shapefiles, GeoJSON, TopoJSON, GeoPackage, Esri File Geodatabase, GML, GPX, FlatGeobuf, and MapInfo with interactive 3D visualization.",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "publisher": "kamaljarada",
   "license": "MIT",
   "icon": "assets/icon.png",
