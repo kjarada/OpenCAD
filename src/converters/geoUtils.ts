@@ -3,10 +3,23 @@ import type { Feature, Geometry, Position, FeatureCollection } from "geojson";
 
 const EARTH_RADIUS_M = 6371000;
 
+export type CoordMode = "geographic" | "cartesian";
+
 interface ProjectionContext {
+  mode: CoordMode;
   centroidLon: number;
   centroidLat: number;
   cosLat: number;
+}
+
+export interface GeojsonToEntitiesOptions {
+  /**
+   * Coordinate interpretation:
+   *  - "geographic" (default): coordinates are [lon, lat, alt?]; projected to local meters via equirectangular.
+   *  - "cartesian": coordinates are planar CAD units. 2D → (x, 0, y); 3D → (x, z, y) to convert CAD Z-up into Three.js Y-up.
+   */
+  mode?: CoordMode;
+  defaultColor?: Color;
 }
 
 function toRadians(deg: number): number {
@@ -72,11 +85,18 @@ function computeCentroid(fc: FeatureCollection): { lon: number; lat: number } {
 }
 
 /**
- * Project a lon/lat/alt position to local Cartesian coordinates (meters).
- * Uses equirectangular approximation centered on the dataset centroid.
- * X = east, Y = up (altitude), Z = north
+ * Project a position to local Cartesian coordinates (meters / CAD units).
+ * Geographic: equirectangular projection around centroid, X=east, Y=altitude, Z=north.
+ * Cartesian: pass-through with CAD Z-up → Three.js Y-up axis swap when Z is present.
  */
 function projectPosition(pos: Position, ctx: ProjectionContext): Point3D {
+  if (ctx.mode === "cartesian") {
+    if (pos.length >= 3) {
+      return { x: pos[0], y: pos[2] ?? 0, z: pos[1] };
+    }
+    return { x: pos[0], y: 0, z: pos[1] };
+  }
+
   const lon = pos[0];
   const lat = pos[1];
   const alt = pos[2] ?? 0;
@@ -93,15 +113,20 @@ function projectPositions(positions: Position[], ctx: ProjectionContext): Point3
 }
 
 /**
- * Convert a GeoJSON FeatureCollection to an array of GeometryEntities,
- * projecting geographic coordinates to local Cartesian.
+ * Convert a GeoJSON FeatureCollection to an array of GeometryEntities.
+ * Defaults to geographic mode (equirectangular projection around the centroid);
+ * pass { mode: "cartesian" } for CAD inputs whose coordinates are already planar.
  */
 export function geojsonToEntities(
   fc: FeatureCollection,
-  defaultColor?: Color
+  options: GeojsonToEntitiesOptions = {}
 ): { entities: GeometryEntity[]; layerCounts: Map<string, number> } {
-  const centroid = computeCentroid(fc);
+  const mode = options.mode ?? "geographic";
+  const defaultColor = options.defaultColor;
+
+  const centroid = mode === "geographic" ? computeCentroid(fc) : { lon: 0, lat: 0 };
   const ctx: ProjectionContext = {
+    mode,
     centroidLon: centroid.lon,
     centroidLat: centroid.lat,
     cosLat: Math.cos(toRadians(centroid.lat)),

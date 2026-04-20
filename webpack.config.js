@@ -2,6 +2,15 @@
 // @ts-check
 
 const path = require("path");
+const CopyPlugin = require("copy-webpack-plugin");
+
+const gdalDist = path.resolve(
+  __dirname,
+  "node_modules",
+  "gdal3.js",
+  "dist",
+  "package"
+);
 
 /** @type {import('webpack').Configuration} */
 const extensionConfig = {
@@ -35,6 +44,14 @@ const extensionConfig = {
       },
     ],
   },
+  plugins: [
+    new CopyPlugin({
+      patterns: [
+        { from: path.join(gdalDist, "gdal3WebAssembly.wasm"), to: "." },
+        { from: path.join(gdalDist, "gdal3WebAssembly.data"), to: "." },
+      ],
+    }),
+  ],
   devtool: "nosources-source-map",
   infrastructureLogging: {
     level: "log",

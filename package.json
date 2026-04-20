@@ -1,7 +1,7 @@
 {
   "name": "opencad",
   "displayName": "OpenCAD",
-  "description": "View and inspect CAD/GIS files directly in VS Code. Supports IFC, DXF, DWG, KML/KMZ, and Shapefiles with interactive 3D visualization.",
+  "description": "View and inspect CAD/GIS files directly in VS Code. Supports IFC, DXF, DWG, DGN, KML/KMZ, Shapefiles, GeoJSON, TopoJSON, GeoPackage, Esri File Geodatabase, GML, GPX, FlatGeobuf, and MapInfo with interactive 3D visualization.",
   "version": "0.3.1",
   "publisher": "kamaljarada",
   "license": "MIT",
@@ -39,12 +39,27 @@
     "industry foundation classes",
     "dxf",
     "dwg",
+    "dgn",
+    "microstation",
     "autocad",
     "shapefile",
+    "gdal",
+    "ogr",
     "gis",
     "kml",
     "kmz",
-    "geospatial"
+    "geospatial",
+    "geojson",
+    "topojson",
+    "geopackage",
+    "gpkg",
+    "gml",
+    "gpx",
+    "flatgeobuf",
+    "mapinfo",
+    "filegdb",
+    "esri",
+    "geodatabase"
   ],
   "activationEvents": [],
   "main": "./dist/extension.js",
@@ -54,24 +69,22 @@
         "viewType": "opencad.cadViewer",
         "displayName": "CAD/GIS Viewer",
         "selector": [
-          {
-            "filenamePattern": "*.ifc"
-          },
-          {
-            "filenamePattern": "*.dxf"
-          },
-          {
-            "filenamePattern": "*.dwg"
-          },
-          {
-            "filenamePattern": "*.kml"
-          },
-          {
-            "filenamePattern": "*.kmz"
-          },
-          {
-            "filenamePattern": "*.shp"
-          }
+          { "filenamePattern": "*.ifc" },
+          { "filenamePattern": "*.dxf" },
+          { "filenamePattern": "*.dwg" },
+          { "filenamePattern": "*.dgn" },
+          { "filenamePattern": "*.kml" },
+          { "filenamePattern": "*.kmz" },
+          { "filenamePattern": "*.shp" },
+          { "filenamePattern": "*.geojson" },
+          { "filenamePattern": "*.topojson" },
+          { "filenamePattern": "*.gpkg" },
+          { "filenamePattern": "*.gml" },
+          { "filenamePattern": "*.gpx" },
+          { "filenamePattern": "*.fgb" },
+          { "filenamePattern": "*.tab" },
+          { "filenamePattern": "*.mif" },
+          { "filenamePattern": "*.gdb" }
         ],
         "priority": "default"
       }
@@ -80,6 +93,11 @@
       {
         "command": "opencad.openViewer",
         "title": "Open CAD Viewer",
+        "category": "OpenCAD"
+      },
+      {
+        "command": "opencad.openGeodatabase",
+        "title": "Open File Geodatabase (.gdb)",
         "category": "OpenCAD"
       },
       {
@@ -98,6 +116,15 @@
         "category": "OpenCAD"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "opencad.openGeodatabase",
+          "when": "explorerResourceIsFolder && resourceExtname == .gdb",
+          "group": "navigation"
+        }
+      ]
+    },
     "configuration": {
       "title": "OpenCAD",
       "properties": {
@@ -147,6 +174,7 @@
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
     "@vscode/vsce": "^2.22.0",
+    "copy-webpack-plugin": "^14.0.0",
     "eslint": "^8.56.0",
     "ts-loader": "^9.5.0",
     "typescript": "^5.3.0",
@@ -154,11 +182,8 @@
     "webpack-cli": "^5.1.0"
   },
   "dependencies": {
-    "@mapbox/togeojson": "^0.16.2",
-    "@xmldom/xmldom": "^0.9.9",
-    "dxf": "^5.3.1",
+    "gdal3.js": "^2.8.1",
     "jszip": "^3.10.1",
-    "shapefile": "^0.6.6",
     "three": "^0.162.0"
   }
 }

@@ -2,7 +2,11 @@
 
 ## Project
 
-OpenCAD is a VS Code extension that views CAD and GIS files with interactive 3D visualization. Supported formats: IFC (4x3/4/2x3), DXF, DWG (experimental), KML/KMZ, and Shapefiles.
+OpenCAD is a VS Code extension that views CAD and GIS files with interactive 3D visualization. Supported formats:
+
+- **BIM**: IFC (4x3 / 4 / 2x3) — via IfcConvert → GLB
+- **CAD**: DXF, DWG, DGN — via GDAL/OGR (`DXF`, `CAD`/libopencad, `DGN` drivers)
+- **GIS vector**: KML, KMZ, Shapefile (`.shp`), GeoJSON, TopoJSON, GeoPackage (`.gpkg`), Esri File Geodatabase (`.gdb`), GML, GPX, FlatGeobuf (`.fgb`), MapInfo TAB/MIF — all via GDAL/OGR.
 
 ## Critical Rules
 
@@ -21,18 +25,13 @@ src/
 ├── ifcConvertManager.ts    ← Downloads & runs IfcConvert binary (IFC → GLB)
 ├── types/
 │   ├── geometry.ts         ← Shared geometry types (GeometryData, GeometryEntity, etc.)
-│   ├── messages.ts         ← Message protocol types (extension ↔ webview)
-│   ├── togeojson.d.ts      ← Type declaration for @mapbox/togeojson
-│   └── shapefile.d.ts      ← Type declaration for shapefile
+│   └── messages.ts         ← Message protocol types (extension ↔ webview)
 ├── converters/
 │   ├── converter.ts        ← FormatConverter interface, ConversionResult union
 │   ├── converterRegistry.ts← Maps file extensions → converter instances
 │   ├── ifcConverter.ts     ← IFC → GLB via IfcConvert binary
-│   ├── dxfConverter.ts     ← DXF → GeometryData via dxf npm
-│   ├── dwgConverter.ts     ← DWG (experimental, suggests DXF export)
-│   ├── kmlConverter.ts     ← KML/KMZ → GeoJSON → GeometryData
-│   ├── shapefileConverter.ts← SHP → GeoJSON → GeometryData
-│   └── geoUtils.ts         ← Geographic projection + GeoJSON → geometry conversion
+│   ├── gdalConverter.ts    ← Vector CAD/GIS → GeoJSON (via gdal3.js ogr2ogr) → GeometryData
+│   └── geoUtils.ts         ← GeoJSON → GeometryEntities (geographic or cartesian projection)
 └── webview/
     ├── main.ts             ← Webview entry: handles loadGlb + loadGeometry messages
     ├── viewer.ts           ← Three.js scene, GLB + geometry loading
@@ -45,13 +44,24 @@ src/
 Two rendering paths through one unified editor provider:
 
 ```
-IFC:  User opens .ifc → IfcConverter (IfcConvert binary) → GLB bytes → GLTFLoader → Three.js
-DXF:  User opens .dxf → DxfConverter (dxf npm parser)    → GeometryData → GeometryRenderer → Three.js
-KML:  User opens .kml → KmlConverter (togeojson + xmldom) → GeometryData → GeometryRenderer → Three.js
-KMZ:  User opens .kmz → KmlConverter (jszip + togeojson)  → GeometryData → GeometryRenderer → Three.js
-SHP:  User opens .shp → ShpConverter (shapefile npm)      → GeometryData → GeometryRenderer → Three.js
-DWG:  User opens .dwg → DwgConverter (experimental)       → Error with guidance to export DXF
+IFC:                 .ifc → IfcConverter (IfcConvert binary) → GLB → GLTFLoader → Three.js
+CAD (cartesian):     .dxf / .dwg / .dgn → GdalConverter → GeoJSON → GeometryData (cartesian, Z-up → Y-up) → GeometryRenderer → Three.js
+GIS (geographic):    .kml / .kmz / .shp / .geojson / .topojson / .gpkg / .gdb / .gml / .gpx / .fgb / .tab / .mif
+                     → GdalConverter (reproject to EPSG:4326) → GeoJSON → GeometryData (geographic) → GeometryRenderer → Three.js
 ```
+
+**Input shape handling in `GdalConverter`:**
+- **Archive formats** (`.kmz` — `ARCHIVE_EXTS`): unpacked via JSZip to a temp file before opening.
+- **Companion-file formats** (`.shp`, `.tab`, `.mif`, `.gml` — `COMPANION_EXTS`): sidecars auto-discovered next to the primary file (`.dbf`/`.prj`/`.shx`, `.dat`/`.map`, `.mid`, `.xsd`) and passed to `gdal.open()` together.
+- **Directory-based formats** (`.gdb` — `DIRECTORY_EXTS`): the directory path itself is passed to `gdal.open()` — gdal3.js's Emscripten FS mounts the parent and `GDALOpenEx` recognises the `.gdb` folder as a single dataset. Because VS Code custom editors only trigger on files, FileGDBs are reached via the `opencad.openGeodatabase` command wired to the Explorer context menu (`resourceExtname == .gdb`).
+
+### GDAL integration
+
+- `gdal3.js` is a WebAssembly port of GDAL. It runs in the extension host (Node.js).
+- `GdalConverter` initializes it lazily, pointing at the WASM + data files copied into `dist/` by `copy-webpack-plugin`.
+- `ogr2ogr` is called with `-f GeoJSON -skipfailures` to produce an in-memory GeoJSON, which is then read back via `getFileBytes` and piped through `geojsonToEntities`. For geographic inputs that have a CRS, `-t_srs EPSG:4326` is added so coordinates are normalized to lon/lat before projection.
+- Coordinate interpretation is chosen per extension: CAD formats (`.dxf`, `.dwg`, `.dgn` — `CARTESIAN_EXTS`) are treated as cartesian with CAD Z-up → Three.js Y-up; all other GIS formats are treated as geographic and projected via equirectangular around the dataset centroid.
+- Add a new format by appending its extension to `GdalConverter.extensions`, optionally registering sidecar companions in `COMPANION_EXTS`, a driver label in `DRIVER_FORMAT_NAMES`, and a filename pattern in `package.json`'s `customEditors.selector`.
 
 ## Tech Stack
 
@@ -59,12 +69,11 @@ DWG:  User opens .dwg → DwgConverter (experimental)       → Error with guida
 |-------|-----------|
 | Runtime | Bun |
 | Language | TypeScript 5+ (strict) |
-| Bundler | Webpack 5 (dual config) |
+| Bundler | Webpack 5 (dual config) + copy-webpack-plugin for GDAL WASM assets |
 | 3D | Three.js (GLTFLoader + GeometryRenderer) |
-| IFC Engine | IfcOpenShell IfcConvert (C++ binary) |
-| DXF Parser | dxf npm package |
-| GIS Parsers | @mapbox/togeojson, shapefile, jszip |
-| XML Parser | @xmldom/xmldom |
+| IFC Engine | IfcOpenShell IfcConvert (C++ binary, downloaded on first use) |
+| Vector CAD/GIS | gdal3.js (GDAL/OGR compiled to WASM) |
+| KMZ extraction | jszip |
 | Lint | ESLint + @typescript-eslint |
 | CI | GitHub Actions + oven-sh/setup-bun |
 
@@ -91,7 +100,7 @@ DWG:  User opens .dwg → DwgConverter (experimental)       → Error with guida
 
 ## Testing
 
-Press `F5` in VS Code to launch Extension Development Host with the extension loaded. Open any `.ifc`, `.dxf`, `.kml`, `.kmz`, or `.shp` file to test.
+Press `F5` in VS Code to launch Extension Development Host with the extension loaded. Open any supported file (`.ifc`, `.dxf`, `.dwg`, `.dgn`, `.kml`, `.kmz`, `.shp`, `.geojson`, `.topojson`, `.gpkg`, `.gml`, `.gpx`, `.fgb`, `.tab`, `.mif`) to test. For File Geodatabases (`.gdb` folders), right-click the folder in the Explorer and pick **OpenCAD: Open File Geodatabase**.
 
 ## Security
 
@@ -100,3 +109,4 @@ Press `F5` in VS Code to launch Extension Development Host with the extension lo
 - IfcConvert binary is downloaded from official IfcOpenShell GitHub releases
 - Binary is cached in `context.globalStorageUri` (VS Code global storage)
 - The extension requires internet on first use to download IfcConvert (~20 MB)
+- gdal3.js WASM + data files (~40 MB) ship inside the extension package; no runtime download needed
