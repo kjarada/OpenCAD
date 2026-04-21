@@ -89,12 +89,28 @@ export class CADEditorProvider implements vscode.CustomReadonlyEditorProvider {
               });
             } else if (conversionResult) {
               if (conversionResult.kind === "glb") {
+                // Pass a plain Uint8Array through structured clone — do NOT
+                // expand to number[], which JSON-serializes each byte and
+                // blows memory up ~10-30x for large IFC→GLB payloads.
+                //
+                // Important: we re-wrap Buffer as a plain Uint8Array view.
+                // Node Buffer has a toJSON() that produces
+                // `{type:"Buffer", data:[...]}`, and VS Code's IPC invokes it
+                // in some paths — the webview then fails to reconstruct a
+                // typed array. A plain Uint8Array has no toJSON and survives
+                // structured clone intact.
+                const raw = conversionResult.data;
+                const glbBytes = new Uint8Array(
+                  raw.buffer,
+                  raw.byteOffset,
+                  raw.byteLength,
+                );
                 webviewPanel.webview.postMessage({
                   type: "loadGlb",
-                  data: Array.from(conversionResult.data),
+                  data: glbBytes,
                   fileName: document.uri.fsPath,
                 });
-                log.info(`[host] Sent loadGlb (${conversionResult.data.length} bytes)`);
+                log.info(`[host] Sent loadGlb (${glbBytes.byteLength} bytes)`);
               } else {
                 webviewPanel.webview.postMessage({
                   type: "loadGeometry",

@@ -18,74 +18,128 @@ export interface GeometryRenderResult {
   layers: Map<string, THREE.Group>;
 }
 
-const DEFAULT_LINE_COLOR = new THREE.Color(0xcccccc);
-const DEFAULT_FILL_COLOR = new THREE.Color(0x6699cc);
+const DEFAULT_LINE_COLOR: Color = { r: 0.8, g: 0.8, b: 0.8, a: 1 };
+const DEFAULT_FILL_COLOR: Color = { r: 0.4, g: 0.6, b: 0.8, a: 1 };
 const CIRCLE_SEGMENTS = 64;
 
-function toThreeColor(color?: Color): THREE.Color {
-  if (!color) {
-    return DEFAULT_LINE_COLOR.clone();
+function colorKey(c: Color | undefined, fallback: Color): string {
+  const x = c ?? fallback;
+  // Quantize to 3 decimal places — avoids cache misses from float noise.
+  return `${x.r.toFixed(3)},${x.g.toFixed(3)},${x.b.toFixed(3)},${x.a.toFixed(3)}`;
+}
+
+class MaterialCache {
+  private lineMats = new Map<string, THREE.LineBasicMaterial>();
+  private meshMats = new Map<string, THREE.MeshStandardMaterial>();
+
+  lineMaterial(color?: Color): THREE.LineBasicMaterial {
+    const key = colorKey(color, DEFAULT_LINE_COLOR);
+    const hit = this.lineMats.get(key);
+    if (hit) {
+      return hit;
+    }
+    const c = color ?? DEFAULT_LINE_COLOR;
+    const mat = new THREE.LineBasicMaterial({
+      color: new THREE.Color(c.r, c.g, c.b),
+      transparent: c.a < 1.0,
+      opacity: c.a,
+    });
+    this.lineMats.set(key, mat);
+    return mat;
   }
-  return new THREE.Color(color.r, color.g, color.b);
-}
 
-function toOpacity(color?: Color): number {
-  return color ? color.a : 1.0;
-}
-
-function getLineMaterial(color?: Color): THREE.LineBasicMaterial {
-  const opacity = toOpacity(color);
-  return new THREE.LineBasicMaterial({
-    color: toThreeColor(color),
-    transparent: opacity < 1.0,
-    opacity,
-  });
-}
-
-function getMeshMaterial(color?: Color): THREE.MeshStandardMaterial {
-  const fillColor = color ? toThreeColor(color) : DEFAULT_FILL_COLOR.clone();
-  const opacity = toOpacity(color);
-  return new THREE.MeshStandardMaterial({
-    color: fillColor,
-    side: THREE.DoubleSide,
-    transparent: opacity < 1.0,
-    opacity,
-  });
-}
-
-function buildLine(entity: LineEntity): THREE.Line {
-  const geometry = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(entity.start.x, entity.start.y, entity.start.z),
-    new THREE.Vector3(entity.end.x, entity.end.y, entity.end.z),
-  ]);
-  return new THREE.Line(geometry, getLineMaterial(entity.color));
-}
-
-function buildPolyline(entity: PolylineEntity): THREE.Line | THREE.LineLoop {
-  const points = entity.points.map(
-    (p) => new THREE.Vector3(p.x, p.y, p.z)
-  );
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  const material = getLineMaterial(entity.color);
-
-  if (entity.closed) {
-    return new THREE.LineLoop(geometry, material);
+  meshMaterial(color?: Color): THREE.MeshStandardMaterial {
+    const key = colorKey(color, DEFAULT_FILL_COLOR);
+    const hit = this.meshMats.get(key);
+    if (hit) {
+      return hit;
+    }
+    const c = color ?? DEFAULT_FILL_COLOR;
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(c.r, c.g, c.b),
+      side: THREE.DoubleSide,
+      transparent: c.a < 1.0,
+      opacity: c.a,
+    });
+    this.meshMats.set(key, mat);
+    return mat;
   }
-  return new THREE.Line(geometry, material);
 }
 
-function buildPolygon(entity: PolygonEntity): THREE.Object3D {
+/**
+ * Accumulates line segment endpoint pairs per color key so we can emit one
+ * THREE.LineSegments per color per layer instead of thousands of tiny
+ * THREE.Line objects. Each push expects vertex count to be even (pairs of
+ * endpoints).
+ */
+class LineSegmentBatcher {
+  private bins = new Map<string, { color?: Color; vertices: number[] }>();
+
+  addSegment(
+    color: Color | undefined,
+    ax: number, ay: number, az: number,
+    bx: number, by: number, bz: number,
+  ): void {
+    const key = colorKey(color, DEFAULT_LINE_COLOR);
+    let bin = this.bins.get(key);
+    if (!bin) {
+      bin = { color, vertices: [] };
+      this.bins.set(key, bin);
+    }
+    bin.vertices.push(ax, ay, az, bx, by, bz);
+  }
+
+  addPolyline(color: Color | undefined, points: { x: number; y: number; z: number }[], closed: boolean): void {
+    const n = points.length;
+    if (n < 2) {
+      return;
+    }
+    const key = colorKey(color, DEFAULT_LINE_COLOR);
+    let bin = this.bins.get(key);
+    if (!bin) {
+      bin = { color, vertices: [] };
+      this.bins.set(key, bin);
+    }
+    const v = bin.vertices;
+    // Expand polyline into pairs of consecutive endpoints.
+    for (let i = 0; i < n - 1; i++) {
+      const p = points[i];
+      const q = points[i + 1];
+      v.push(p.x, p.y, p.z, q.x, q.y, q.z);
+    }
+    if (closed) {
+      const p = points[n - 1];
+      const q = points[0];
+      v.push(p.x, p.y, p.z, q.x, q.y, q.z);
+    }
+  }
+
+  flushInto(target: THREE.Object3D, materials: MaterialCache): void {
+    for (const bin of this.bins.values()) {
+      if (bin.vertices.length === 0) {
+        continue;
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute(
+        "position",
+        new THREE.Float32BufferAttribute(new Float32Array(bin.vertices), 3),
+      );
+      target.add(new THREE.LineSegments(geom, materials.lineMaterial(bin.color)));
+    }
+    this.bins.clear();
+  }
+}
+
+function buildPolygon(entity: PolygonEntity, materials: MaterialCache): THREE.Object3D | null {
   if (entity.rings.length === 0) {
-    return new THREE.Group();
+    return null;
   }
 
   const outerRing = entity.rings[0];
   if (outerRing.length < 3) {
-    return new THREE.Group();
+    return null;
   }
 
-  // Create a 2D shape from the outer ring (project to XZ plane for shapes)
-  // Determine primary plane by checking if geometry is more XY, XZ, or YZ
   const shape = new THREE.Shape();
   shape.moveTo(outerRing[0].x, outerRing[0].z);
   for (let i = 1; i < outerRing.length; i++) {
@@ -93,7 +147,6 @@ function buildPolygon(entity: PolygonEntity): THREE.Object3D {
   }
   shape.closePath();
 
-  // Add holes
   for (let h = 1; h < entity.rings.length; h++) {
     const holeRing = entity.rings[h];
     if (holeRing.length < 3) {continue;}
@@ -106,9 +159,8 @@ function buildPolygon(entity: PolygonEntity): THREE.Object3D {
     shape.holes.push(holePath);
   }
 
-  const material = getMeshMaterial(entity.color);
+  const material = materials.meshMaterial(entity.color);
   let geometry: THREE.BufferGeometry;
-
   if (entity.extrudeHeight && entity.extrudeHeight > 0) {
     geometry = new THREE.ExtrudeGeometry(shape, {
       depth: entity.extrudeHeight,
@@ -119,57 +171,45 @@ function buildPolygon(entity: PolygonEntity): THREE.Object3D {
   }
 
   const mesh = new THREE.Mesh(geometry, material);
-  // ShapeGeometry creates geometry in XY; rotate to XZ plane
   mesh.rotation.x = -Math.PI / 2;
-
   return mesh;
 }
 
-function buildCircle(entity: CircleEntity): THREE.LineLoop {
-  const points: THREE.Vector3[] = [];
-  for (let i = 0; i <= CIRCLE_SEGMENTS; i++) {
-    const angle = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
-    points.push(
-      new THREE.Vector3(
-        entity.center.x + Math.cos(angle) * entity.radius,
-        entity.center.y,
-        entity.center.z + Math.sin(angle) * entity.radius
-      )
-    );
+function batchCircle(entity: CircleEntity, batcher: LineSegmentBatcher): void {
+  const cx = entity.center.x, cy = entity.center.y, cz = entity.center.z;
+  const r = entity.radius;
+  let prevX = cx + r, prevZ = cz;
+  for (let i = 1; i <= CIRCLE_SEGMENTS; i++) {
+    const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
+    const x = cx + Math.cos(a) * r;
+    const z = cz + Math.sin(a) * r;
+    batcher.addSegment(entity.color, prevX, cy, prevZ, x, cy, z);
+    prevX = x; prevZ = z;
   }
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  return new THREE.LineLoop(geometry, getLineMaterial(entity.color));
 }
 
-function buildArc(entity: ArcEntity): THREE.Line {
-  const points: THREE.Vector3[] = [];
+function batchArc(entity: ArcEntity, batcher: LineSegmentBatcher): void {
+  const cx = entity.center.x, cy = entity.center.y, cz = entity.center.z;
+  const r = entity.radius;
   const startAngle = entity.startAngle;
   let endAngle = entity.endAngle;
-
-  // Ensure we go in the positive direction
   if (endAngle < startAngle) {
     endAngle += Math.PI * 2;
   }
-
   const segments = Math.max(
     8,
-    Math.ceil(((endAngle - startAngle) / (Math.PI * 2)) * CIRCLE_SEGMENTS)
+    Math.ceil(((endAngle - startAngle) / (Math.PI * 2)) * CIRCLE_SEGMENTS),
   );
-
-  for (let i = 0; i <= segments; i++) {
+  let prevX = cx + Math.cos(startAngle) * r;
+  let prevZ = cz + Math.sin(startAngle) * r;
+  for (let i = 1; i <= segments; i++) {
     const t = i / segments;
-    const angle = startAngle + t * (endAngle - startAngle);
-    points.push(
-      new THREE.Vector3(
-        entity.center.x + Math.cos(angle) * entity.radius,
-        entity.center.y,
-        entity.center.z + Math.sin(angle) * entity.radius
-      )
-    );
+    const a = startAngle + t * (endAngle - startAngle);
+    const x = cx + Math.cos(a) * r;
+    const z = cz + Math.sin(a) * r;
+    batcher.addSegment(entity.color, prevX, cy, prevZ, x, cy, z);
+    prevX = x; prevZ = z;
   }
-
-  const geometry = new THREE.BufferGeometry().setFromPoints(points);
-  return new THREE.Line(geometry, getLineMaterial(entity.color));
 }
 
 function buildText(entity: TextEntity): THREE.Sprite {
@@ -184,7 +224,6 @@ function buildText(entity: TextEntity): THREE.Sprite {
   canvas.width = Math.ceil(textWidth) + 4;
   canvas.height = fontSize + 8;
 
-  // Re-set font after canvas resize clears it
   ctx.font = `${fontSize}px monospace`;
   const color = entity.color
     ? `rgba(${Math.round(entity.color.r * 255)}, ${Math.round(entity.color.g * 255)}, ${Math.round(entity.color.b * 255)}, ${entity.color.a})`
@@ -203,67 +242,77 @@ function buildText(entity: TextEntity): THREE.Sprite {
 
   const sprite = new THREE.Sprite(material);
   sprite.position.set(entity.position.x, entity.position.y, entity.position.z);
-
-  // Scale based on text height
   const aspect = canvas.width / canvas.height;
   sprite.scale.set(entity.height * aspect, entity.height, 1);
-
   if (entity.rotation) {
     sprite.material.rotation = entity.rotation;
   }
-
   return sprite;
 }
 
-function buildMesh(entity: MeshEntity): THREE.Mesh {
+function buildMesh(entity: MeshEntity, materials: MaterialCache): THREE.Mesh {
   const geometry = new THREE.BufferGeometry();
 
-  geometry.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(entity.vertices, 3)
-  );
+  const positions = new Float32Array(entity.vertices);
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
   if (entity.indices.length > 0) {
-    geometry.setIndex(entity.indices);
+    // Pick Uint16 when the vertex count fits — halves GPU index memory vs Uint32.
+    const vertexCount = positions.length / 3;
+    const indexArray =
+      vertexCount > 65535
+        ? new Uint32Array(entity.indices)
+        : new Uint16Array(entity.indices);
+    geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
   }
 
   if (entity.normals && entity.normals.length > 0) {
     geometry.setAttribute(
       "normal",
-      new THREE.Float32BufferAttribute(entity.normals, 3)
+      new THREE.BufferAttribute(new Float32Array(entity.normals), 3),
     );
   } else {
     geometry.computeVertexNormals();
   }
 
-  return new THREE.Mesh(geometry, getMeshMaterial(entity.color));
+  return new THREE.Mesh(geometry, materials.meshMaterial(entity.color));
 }
 
-function buildEntity(entity: GeometryEntity): THREE.Object3D {
-  switch (entity.kind) {
-    case "line":
-      return buildLine(entity);
-    case "polyline":
-      return buildPolyline(entity);
-    case "polygon":
-      return buildPolygon(entity);
-    case "circle":
-      return buildCircle(entity);
-    case "arc":
-      return buildArc(entity);
-    case "text":
-      return buildText(entity);
-    case "mesh":
-      return buildMesh(entity);
-  }
+function addLineEntity(entity: LineEntity, batcher: LineSegmentBatcher): void {
+  batcher.addSegment(
+    entity.color,
+    entity.start.x, entity.start.y, entity.start.z,
+    entity.end.x, entity.end.y, entity.end.z,
+  );
+}
+
+function addPolylineEntity(entity: PolylineEntity, batcher: LineSegmentBatcher): void {
+  batcher.addPolyline(entity.color, entity.points, entity.closed);
 }
 
 export function buildGeometry(data: GeometryData): GeometryRenderResult {
   const root = new THREE.Group();
+  const materials = new MaterialCache();
   const layerGroups = new Map<string, THREE.Group>();
+  // One batcher per layer so layer.visible still toggles everything on/off.
+  const layerBatchers = new Map<string, LineSegmentBatcher>();
   let elementCount = 0;
 
-  // Create layer groups
+  function getLayerTarget(layerName: string): { group: THREE.Group; batcher: LineSegmentBatcher } {
+    let group = layerGroups.get(layerName);
+    if (!group) {
+      // Unknown layer (e.g., entity references layer that wasn't declared).
+      // Fall back to default layer rather than creating a hidden one.
+      group = layerGroups.get("__default__")!;
+    }
+    let batcher = layerBatchers.get(group.name);
+    if (!batcher) {
+      batcher = new LineSegmentBatcher();
+      layerBatchers.set(group.name, batcher);
+    }
+    return { group, batcher };
+  }
+
   for (const layerInfo of data.layers) {
     const group = new THREE.Group();
     group.name = layerInfo.name;
@@ -272,18 +321,51 @@ export function buildGeometry(data: GeometryData): GeometryRenderResult {
     root.add(group);
   }
 
-  // Default layer for entities without a layer assignment
   const defaultLayer = new THREE.Group();
   defaultLayer.name = "__default__";
+  layerGroups.set("__default__", defaultLayer);
   root.add(defaultLayer);
 
-  for (const entity of data.entities) {
-    const obj = buildEntity(entity);
+  for (const entity of data.entities as GeometryEntity[]) {
+    const layerName = "layer" in entity ? (entity.layer ?? "__default__") : "__default__";
+    const { group, batcher } = getLayerTarget(layerName);
     elementCount++;
 
-    const layerName = "layer" in entity ? (entity.layer ?? "") : "";
-    const targetGroup = layerGroups.get(layerName) ?? defaultLayer;
-    targetGroup.add(obj);
+    switch (entity.kind) {
+      case "line":
+        addLineEntity(entity, batcher);
+        break;
+      case "polyline":
+        addPolylineEntity(entity, batcher);
+        break;
+      case "circle":
+        batchCircle(entity, batcher);
+        break;
+      case "arc":
+        batchArc(entity, batcher);
+        break;
+      case "polygon": {
+        const obj = buildPolygon(entity, materials);
+        if (obj) {
+          group.add(obj);
+        }
+        break;
+      }
+      case "text":
+        group.add(buildText(entity));
+        break;
+      case "mesh":
+        group.add(buildMesh(entity, materials));
+        break;
+    }
+  }
+
+  // Flush batched lines into each layer group.
+  for (const [layerName, batcher] of layerBatchers) {
+    const group = layerGroups.get(layerName);
+    if (group) {
+      batcher.flushInto(group, materials);
+    }
   }
 
   return { group: root, elementCount, layers: layerGroups };

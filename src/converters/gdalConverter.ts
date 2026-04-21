@@ -115,12 +115,19 @@ export class GdalConverter implements FormatConverter {
 
   private getGdal(): Promise<Gdal> {
     if (!this.gdalPromise) {
-      const distDir = path.join(this.context.extensionPath, "dist");
-      this.gdalPromise = initGdalJs({
-        path: gdalConfigPath(distDir),
-      }) as Promise<Gdal>;
+      this.gdalPromise = this.initGdal();
     }
     return this.gdalPromise;
+  }
+
+  private async initGdal(): Promise<Gdal> {
+    const distDir = path.join(this.context.extensionPath, "dist");
+    const fallbackDir = path.join(
+      this.context.globalStorageUri.fsPath,
+      "gdal-assets",
+    );
+    const configPath = await resolveGdalConfigPath(distDir, fallbackDir);
+    return (await initGdalJs({ path: configPath })) as Gdal;
   }
 
   async convert(filePath: string): Promise<ConversionResult> {
@@ -226,6 +233,9 @@ function toPosix(p: string): string {
   return p.replace(/\\/g, "/");
 }
 
+/** Gdal3.js Node runtime needs these two asset files alongside config.path. */
+const GDAL_ASSET_FILES = ["gdal3WebAssembly.wasm", "gdal3WebAssembly.data"];
+
 /**
  * Produce a `config.path` value for gdal3.js that survives its Node runtime quirks.
  *
@@ -233,21 +243,50 @@ function toPosix(p: string): string {
  * the packaged `.data` file (see `node_modules/gdal3.js/dist/package/gdal3.node.js`).
  * With an absolute Windows path like "c:/foo/dist/", `"./" + "c:/..."` is treated as
  * relative and resolved against `process.cwd()`, producing garbage like
- * `<vscode-install>/c:/foo/dist/...`. Passing a path *relative to process.cwd()*
- * works around that.
+ * `<vscode-install>/c:/foo/dist/...`. Passing a path *relative to process.cwd()* works.
+ *
+ * When the extension and VS Code are on different Windows drives (e.g. extension on D:,
+ * VS Code on C:), `path.relative` returns an absolute path — there is no valid relative
+ * form. In that case mirror the two required assets into `fallbackDir` (which is on the
+ * same drive as VS Code's cwd because it lives under VS Code's user data dir) and use
+ * that as the config path instead.
  */
-function gdalConfigPath(distDir: string): string {
-  const rel = path.relative(process.cwd(), distDir);
-  if (path.isAbsolute(rel)) {
-    // path.relative returns an absolute path when the drives differ on Windows.
-    // gdal3.js's "./" prefix makes that unusable and there's no runtime workaround.
+async function resolveGdalConfigPath(distDir: string, fallbackDir: string): Promise<string> {
+  const direct = relativePosixFromCwd(distDir);
+  if (direct !== null) {
+    return direct;
+  }
+
+  await fs.promises.mkdir(fallbackDir, { recursive: true });
+  for (const name of GDAL_ASSET_FILES) {
+    await copyIfStale(path.join(distDir, name), path.join(fallbackDir, name));
+  }
+
+  const rel = relativePosixFromCwd(fallbackDir);
+  if (rel === null) {
     throw new Error(
-      `Cannot locate GDAL assets at ${distDir}: they are on a different drive than ` +
-        `VS Code's working directory (${process.cwd()}). Install VS Code and OpenCAD on ` +
-        `the same drive.`
+      `Cannot locate GDAL assets: ${distDir} and the fallback ${fallbackDir} are both ` +
+        `on a different drive than VS Code's working directory (${process.cwd()}).`,
     );
   }
+  return rel;
+}
+
+function relativePosixFromCwd(dir: string): string | null {
+  const rel = path.relative(process.cwd(), dir);
+  if (path.isAbsolute(rel)) {
+    return null;
+  }
   return rel.split(path.sep).join("/");
+}
+
+async function copyIfStale(src: string, dst: string): Promise<void> {
+  const srcStat = await fs.promises.stat(src);
+  const dstStat = await fs.promises.stat(dst).catch(() => null);
+  if (dstStat && dstStat.size === srcStat.size && dstStat.mtimeMs >= srcStat.mtimeMs) {
+    return;
+  }
+  await fs.promises.copyFile(src, dst);
 }
 
 /**

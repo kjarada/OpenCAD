@@ -8,6 +8,11 @@ export interface ModelInfo {
   elementCount: number;
 }
 
+// Scene-size thresholds above which we switch off the expensive-but-pretty stuff.
+// Shadow mapping renders the scene twice per frame, which becomes the dominant
+// cost on huge CAD/GIS files.
+const SHADOW_ELEMENT_LIMIT = 5_000;
+
 export class IFCViewer {
   private scene: THREE.Scene;
   private camera: THREE.PerspectiveCamera;
@@ -19,6 +24,8 @@ export class IFCViewer {
   private gltfLoader: GLTFLoader;
   private model: THREE.Object3D | null = null;
   private wireframeMode = false;
+  private needsRender = true;
+  private shadowsEnabled = true;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -59,6 +66,10 @@ export class IFCViewer {
     this.controls.screenSpacePanning = true;
     this.controls.minDistance = 0.1;
     this.controls.maxDistance = 5000;
+    // Render-on-demand: only redraw when the camera actually moves.
+    this.controls.addEventListener("change", () => {
+      this.needsRender = true;
+    });
 
     // Handle resize
     const resizeObserver = new ResizeObserver(() => this.onResize());
@@ -133,20 +144,29 @@ export class IFCViewer {
         (gltf) => {
           const modelGroup = gltf.scene;
           let elementCount = 0;
-
-          // Enable shadows on all meshes
           modelGroup.traverse((child: THREE.Object3D) => {
             if ((child as THREE.Mesh).isMesh) {
-              const mesh = child as THREE.Mesh;
-              mesh.castShadow = true;
-              mesh.receiveShadow = true;
               elementCount++;
             }
           });
 
+          // Decide once whether shadows are affordable. Shadow passes double
+          // the cost of each frame; on dense IFC models that's a huge hit.
+          this.applyShadowPolicy(elementCount);
+          if (this.shadowsEnabled) {
+            modelGroup.traverse((child: THREE.Object3D) => {
+              if ((child as THREE.Mesh).isMesh) {
+                const mesh = child as THREE.Mesh;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+              }
+            });
+          }
+
           this.model = modelGroup;
           this.scene.add(modelGroup);
           this.fitToView();
+          this.needsRender = true;
 
           // Hide loading overlay
           const overlay = document.getElementById("loading-overlay");
@@ -171,6 +191,8 @@ export class IFCViewer {
     }
 
     const result = buildGeometry(data);
+
+    this.applyShadowPolicy(result.elementCount);
 
     this.model = result.group;
     this.scene.add(result.group);
@@ -202,7 +224,17 @@ export class IFCViewer {
       overlay.classList.add("hidden");
     }
 
+    this.needsRender = true;
     return { elementCount: result.elementCount };
+  }
+
+  private applyShadowPolicy(elementCount: number): void {
+    const enable = elementCount <= SHADOW_ELEMENT_LIMIT;
+    if (enable === this.shadowsEnabled) {
+      return;
+    }
+    this.shadowsEnabled = enable;
+    this.renderer.shadowMap.enabled = enable;
   }
 
   fitToView(): void {
@@ -225,6 +257,7 @@ export class IFCViewer {
     this.camera.lookAt(center);
     this.controls.target.copy(center);
     this.controls.update();
+    this.needsRender = true;
   }
 
   resetCamera(): void {
@@ -232,25 +265,29 @@ export class IFCViewer {
     this.camera.lookAt(0, 0, 0);
     this.controls.target.set(0, 0, 0);
     this.controls.update();
+    this.needsRender = true;
   }
 
   toggleWireframe(): void {
     this.wireframeMode = !this.wireframeMode;
 
     if (this.model) {
+      // Shared materials mean we can flip wireframe once per unique material
+      // rather than once per mesh — huge win on merged/batched scenes.
+      const seen = new Set<THREE.Material>();
       this.model.traverse((child: THREE.Object3D) => {
         if ((child as THREE.Mesh).isMesh) {
           const mesh = child as THREE.Mesh;
-          if (Array.isArray(mesh.material)) {
-            mesh.material.forEach((mat) => {
-              (mat as THREE.MeshStandardMaterial).wireframe = this.wireframeMode;
-            });
-          } else {
-            (mesh.material as THREE.MeshStandardMaterial).wireframe = this.wireframeMode;
+          const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+          for (const mat of mats) {
+            if (seen.has(mat)) {continue;}
+            seen.add(mat);
+            (mat as THREE.MeshStandardMaterial).wireframe = this.wireframeMode;
           }
         }
       });
     }
+    this.needsRender = true;
   }
 
   toggleProjection(): void {
@@ -267,12 +304,14 @@ export class IFCViewer {
   toggleGrid(): void {
     if (this.grid) {
       this.grid.visible = !this.grid.visible;
+      this.needsRender = true;
     }
   }
 
   toggleAxes(): void {
     if (this.axes) {
       this.axes.visible = !this.axes.visible;
+      this.needsRender = true;
     }
   }
 
@@ -283,12 +322,18 @@ export class IFCViewer {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.needsRender = true;
   }
 
   private animate = (): void => {
     requestAnimationFrame(this.animate);
-    this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    // OrbitControls with damping still interpolates for a few frames after
+    // user input stops — calling update() returns true while it's animating.
+    const controlsChanged = this.controls.update();
+    if (controlsChanged || this.needsRender) {
+      this.needsRender = false;
+      this.renderer.render(this.scene, this.camera);
+    }
   };
 
   dispose(): void {

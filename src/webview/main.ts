@@ -15,6 +15,32 @@ function wlog(msg: string): void {
   vscode.postMessage({ type: "log", message: msg });
 }
 
+/**
+ * Decode the GLB payload that `cadEditorProvider` sends.
+ *
+ * Happy path: it arrives as a `Uint8Array` via structured clone.
+ * Fallback: if some IPC layer JSON-serializes it, Node `Buffer`
+ * becomes `{type:"Buffer", data:number[]}` and plain arrays arrive as-is.
+ */
+function toUint8Array(input: unknown): Uint8Array {
+  if (input instanceof Uint8Array) {
+    return input;
+  }
+  if (input instanceof ArrayBuffer) {
+    return new Uint8Array(input);
+  }
+  if (Array.isArray(input)) {
+    return new Uint8Array(input);
+  }
+  if (input && typeof input === "object") {
+    const obj = input as { data?: unknown };
+    if (Array.isArray(obj.data) || obj.data instanceof Uint8Array) {
+      return new Uint8Array(obj.data as ArrayLike<number>);
+    }
+  }
+  throw new Error("Invalid GLB payload: expected Uint8Array-compatible data");
+}
+
 let viewer: IFCViewer | null = null;
 
 async function init(): Promise<void> {
@@ -43,7 +69,7 @@ window.addEventListener("message", async (event) => {
       }
 
       try {
-        const data = new Uint8Array(message.data);
+        const data = toUint8Array(message.data);
         wlog(`loadGlb: ${data.length} bytes`);
         if (viewer) {
           const info = await viewer.loadGlb(data);
