@@ -2,7 +2,7 @@
   "name": "opencad",
   "displayName": "OpenCAD",
   "description": "View and inspect CAD/GIS files directly in VS Code. Supports IFC, DXF, DWG, DGN, KML/KMZ, Shapefiles, GeoJSON, TopoJSON, GeoPackage, Esri File Geodatabase, GML, GPX, FlatGeobuf, and MapInfo with interactive 3D visualization.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "kamaljarada",
   "license": "MIT",
   "icon": "assets/icon.png",
@@ -163,8 +163,8 @@
     "lint": "bun x eslint src --ext .ts",
     "lint:fix": "bun x eslint src --ext .ts --fix",
     "test": "bun ./out/test/runTest.js",
-    "package": "bun x @vscode/vsce package --no-dependencies",
-    "publish": "bun x @vscode/vsce publish --no-dependencies"
+    "package": "bun x @vscode/vsce package --pre-release --no-dependencies",
+    "publish": "bun x @vscode/vsce publish --pre-release --no-dependencies"
   },
   "devDependencies": {
     "@types/geojson": "^7946.0.16",
